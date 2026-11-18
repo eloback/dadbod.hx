@@ -28,6 +28,9 @@ Scheme side of the bindings in `helix-term/src/commands/engine/steel/*.scm`
   `set-error!`.
 - **Steel puts a space in front of an error's message**: trim
   `(error-object-message err)` before showing it.
+- **Never raise an error from inside a `with-handler` handler.** It crashes
+  the Steel VM ("Failed to find an open continuation"). Have the handler
+  return a value and raise afterwards.
 
 ## The editor
 
@@ -49,6 +52,19 @@ Scheme side of the bindings in `helix-term/src/commands/engine/steel/*.scm`
   in the way of `:q` (one named with `set-scratch-buffer-name!` doesn't). A
   real file never does, which is one reason results are files.
 - **`equal?` works on modes** and on document and view ids.
+- **A named scratch buffer as a panel** works: `(helix.new)`,
+  `set-scratch-buffer-name!`, then `*reverse-buffer-map-insert*` with the
+  document's number and a label gives it the keymap registered for that
+  label. Its text is replaced with `select_all` and `replace-selection-with`.
+- **Helix doesn't scroll to the cursor** after a command run from a callback
+  (a prompt's answer, a timer): call `align_view_center`.
+- **`(push-component! (prompt label callback))`** asks for a line of text at
+  the bottom of the screen; editor commands work inside its callback.
+- **The `document-saved` hook can run before the file on disk has the new
+  text.** Take the text from the buffer, not the file.
+- **A document's path is normalized, not resolved**: symlinks in it stay,
+  except that a relative path is completed with the resolved working
+  directory. Compare it with other paths after `canonicalize-path` on both.
 - **Typed commands are callable**: `(require (prefix-in helix.
   "helix/commands.scm"))`, then `(helix.hsplit path)`, `(helix.goto-line 1)`.
   They run synchronously: the focus is on the new window when `hsplit`
@@ -101,6 +117,8 @@ Scheme side of the bindings in `helix-term/src/commands/engine/steel/*.scm`
   otherwise to `~/.local/share/steel`.
 - **A name that isn't defined is a compile error for the whole file**, not a
   runtime error at the call.
+- **`quote` can't be a parameter's name** (the compiler panics), like other
+  special forms.
 - **`(provide)` with nothing in it is an error.**
 - **`forge pkg install --git <url>` installs the repository's root** and
   copies everything in it. It has no option for a subdirectory. `forge
@@ -119,10 +137,13 @@ Scheme side of the bindings in `helix-term/src/commands/engine/steel/*.scm`
   `.helix/languages.toml`, and shows `[⚠]` until given. It does **not** gate
   the project-local Steel config: opening Helix in a repository with those
   two files runs their code.
-- **Per-buffer keymaps** exist (`set-global-buffer-or-extension-keymap`): by
-  file extension, or by a label the plugin ties to a document (oil.hx does
-  that for its buffer). The extension wins when both apply. Not used here
-  yet; it is what the result buffer's keys and the dadbod-ui drawer need.
+- **Per-buffer keymaps** (`set-global-buffer-or-extension-keymap`): by file
+  extension (the result window's keys are on `dbout`), or by a label the
+  plugin ties to a document (the drawer). The extension wins when both
+  apply. The map has to start from a copy of the global one
+  (`deep-copy-global-keybindings`), or the buffer loses every other key. The
+  copy is of the keys as they are then: make it when the buffer is shown,
+  not when the plugin is loaded, or keys `init.scm` adds later are missing.
 
 ## What it can't do
 

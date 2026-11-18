@@ -13,8 +13,11 @@ dadbod/               plugin 1: what the commands do
   api.scm             what other plugins may use
   core/               no Helix
   hx/                 Helix
-dadbod-ui.scm         plugin 2 (not written yet): its typed commands
+dadbod-ui.scm         plugin 2: its typed commands, and nothing else
 dadbod-ui/            plugin 2: what they do
+  config.scm          its options
+  core/               no Helix, nothing of dadbod
+  hx/                 Helix, and dadbod through api.scm
 tests/  docs/  dev/
 ```
 
@@ -24,8 +27,8 @@ without the other being loaded (dadbod-ui needs dadbod installed, not
 required by the user), and dadbod knows nothing of dadbod-ui.
 
 ```scheme
-(require "dadbod/dadbod.scm")       ; :db-run, :db-cancel
-(require "dadbod/dadbod-ui.scm")    ; the drawer, once it exists
+(require "dadbod/dadbod.scm")       ; :db-run and its companions
+(require "dadbod/dadbod-ui.scm")    ; :dbui, the drawer
 ```
 
 They share a repository and a package because `forge pkg install --git` can
@@ -45,9 +48,12 @@ plugin that the end-to-end suite uses to hold `api.scm` to that.
 ## Entry files provide commands only
 
 Whatever a file required from `init.scm` provides becomes a typed command in
-Helix. So `dadbod.scm` provides `db-run` and `db-cancel`, with their `;;@doc`
-comments (Helix shows them), and nothing else. A helper provided from there
-by accident would be a command.
+Helix. So `dadbod.scm` and `dadbod-ui.scm` provide their commands, with
+their `;;@doc` comments (Helix shows them), and nothing else. A helper
+provided from there by accident would be a command. What `init.scm` calls to
+configure things (`dadbod-connections!`, `dadbod-ui-set!`) is in files of
+its own, `dadbod/api.scm` and `dadbod-ui/config.scm`, required only by those
+who use it.
 
 ## `core/` and `hx/`
 
@@ -67,6 +73,7 @@ little as possible in `hx/`.**
 | `core/adapter.scm` | What an adapter is (`adapter`, `invocation`) and the rules all of them keep. |
 | `core/adapters/*.scm` | One file per database. |
 | `core/adapters.scm` | The registry. |
+| `core/connections.scm` | Named connections: the file format, merging sources, what a reference stands for. |
 | `core/job.scm` | The client as a child process: run, wait, signal. |
 | `core/result.scm` | A whole run into files, for a person (`run-to-result!`) or a program (`run-to-files!`). |
 | `core/session.scm` | The state of a Helix session and what each event does to it. Pure. |
@@ -80,15 +87,16 @@ little as possible in `hx/`.**
 
 1. a file other than an `hx/editor.scm` requires a Helix module;
 2. a file in `core/` requires from `hx/`;
-3. dadbod requires dadbod-ui, or dadbod-ui requires from dadbod anything but
-   `api.scm`.
+3. dadbod requires dadbod-ui;
+4. dadbod-ui requires from dadbod anything but `api.scm`.
 
 ### `hx/editor.scm` is the only door to Helix
 
 The plugin API exists only in an unmerged fork and will change. Every other
 file asks `editor.scm` for what it needs in dadbod's terms (`selection-text`,
 `show-in-split!`, `run-when-normal!`), so an API change is fixed in one file.
-dadbod-ui gets its own `dadbod-ui/hx/editor.scm` for what a drawer needs.
+dadbod-ui has its own, `dadbod-ui/hx/editor.scm`, for what a drawer needs:
+a panel, a prompt, hooks.
 
 ### The session is a pure state machine
 
@@ -116,10 +124,49 @@ arguments, environment). The query always goes to the client on stdin.
   table of sample URLs. An adapter without a row there fails the test, so
   the contract can't be skipped.
 
-Adding a database: the three steps at the top of `core/adapters.scm`. When
-dadbod-ui needs per-database knowledge (how to list tables, the table
-helpers), it becomes more fields of the adapter record, not a second place
-that knows about databases.
+Adding a database: the three steps at the top of `core/adapters.scm`. What
+dadbod-ui needs to know per database (the query that lists tables, the table
+helpers) is fields of the same adapter record, reached through `api.scm`:
+there is one place that knows about databases.
+
+## Databases, connections, buffers
+
+A "database" in the code is what the user typed to say which one: a URL or
+a connection's name. It is kept as typed, in the session, and looked up at
+each run (`look-up` in `hx/commands.scm`), because a connection can point at
+an environment variable or a command whose answer changes, and because the
+looked-up URL holds the password. The session keeps one per buffer, keyed by
+the file's path, and the one used last.
+
+Looking a connection up can run its command, so it only happens when the
+user asks for that database: running against it, `:db-use <name>`, opening
+its tables in the drawer. Nothing that merely shows or lists does it, and a
+connection from the project's file may not use a command at all.
+
+Another plugin can say which database a file belongs to
+(`dadbod-database-of-file!`), asked when nothing was chosen for the buffer;
+and that a buffer is not a query at all (`dadbod-not-a-query!`). dadbod-ui
+uses both: a query file belongs to the database whose folder it is in, and
+the drawer is not a query.
+
+## dadbod-ui
+
+`dadbod-ui/core/drawer.scm` is the drawer as a pure model: the databases,
+what is expanded, what is known about each, the lines that makes, and what
+selecting a line asks for, as data (`(load-tables "shop")`). It knows nothing
+of dadbod. `dadbod-ui/hx/drawer.scm` keeps the one drawer, draws its lines
+into a named scratch buffer with keys of its own, and carries the actions
+out through `api.scm`. Tables arrive later, through a callback; the drawer
+is only redrawn while it is what the user is looking at. So the lines last
+drawn are kept: the cursor is read against those, and a key pressed while
+they differ from the model only redraws.
+
+Table names come from the database and can be anything. A helper's template
+never gets one as it is: `expand-helper` quotes it as an identifier or
+escapes it for a string (`core/adapter.scm`).
+
+Query files are plain files in a folder per database (`core/store.scm`), so
+the "saved queries" of a database are whatever `.sql` files are there.
 
 ## Processes
 

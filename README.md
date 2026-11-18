@@ -7,11 +7,16 @@ read the result in a split, in the spirit of
 It is a plugin for the Steel plugin system, so it needs Helix built from
 [mattwparas's `steel-event-system` fork](https://github.com/mattwparas/helix/blob/steel-event-system/STEEL.md).
 
-It is young: two commands, `:db-run` and `:db-cancel`, and three adapters
-(PostgreSQL, MySQL/MariaDB, SQLite). [docs/FEATURES.md](docs/FEATURES.md)
-compares it with vim-dadbod feature by feature and says what comes next. A
-companion plugin in the manner of vim-dadbod-ui is planned in this
-repository ([dadbod-ui/](dadbod-ui/README.md)).
+The repository holds two plugins, loaded separately:
+
+- **dadbod**: `:db-run` and its companions, for PostgreSQL, MySQL/MariaDB and
+  SQLite. This page.
+- **dadbod-ui**: `:dbui`, a drawer of your connections, their tables and
+  saved queries, in the manner of vim-dadbod-ui.
+  [dadbod-ui/README.md](dadbod-ui/README.md).
+
+[docs/FEATURES.md](docs/FEATURES.md) compares both with their Vim
+counterparts, feature by feature.
 
 ## Usage
 
@@ -35,9 +40,11 @@ runs the buffer against that database and opens the result below it:
   blank one. To run one statement, select it first: `x` for the line, `mip`
   for the paragraph. Mind that most Helix motions (`w`, `f`, `n`) leave a
   selection behind, and that selection is what would run.
-- **Which database.** `:db-run <url>` uses that URL and remembers it for the
-  rest of the session. `:db-run` alone uses the remembered URL, and otherwise
-  `$DATABASE_URL`.
+- **Which database.** `:db-run <database>` runs against it and chooses it
+  for this buffer; a database is a URL or the name of a
+  [connection](#connections). `:db-run` alone uses the buffer's database,
+  else the one used last, else `$DATABASE_URL`. So two SQL files can each
+  keep their own database.
 - **The result** is a file (`result.dbout`) shown in a horizontal split, which
   is reused by later runs. The focus stays on your query. The first line names
   the database, without the password.
@@ -52,12 +59,62 @@ runs the buffer against that database and opens the result below it:
   react, run it again: that stops the client itself, but then the server may
   go on running the statement.
 
+The other commands:
+
+| | |
+| --- | --- |
+| `:db-use <database>` | Choose this buffer's database without running anything. Alone, it shows which one is in use and the connections there are. |
+| `:db-query <sql>` | Run what is typed after it: `:db-query select count(*) from users`. |
+| `:db-rerun` | Run the last query again, against the same database. |
+| `:db-cancel` | See above. |
+
+In the result window, `R` reruns the last query, `C-c` cancels the one
+running, and `q` closes the window.
+
 A key for it, in `init.scm`:
 
 ```scheme
 (require "helix/keymaps.scm")
 
 (keymap (global) (normal (space (x ":db-run"))))
+```
+
+## Connections
+
+A connection is a name for a database, so that you type `:db-run prod`.
+Write them one per line, the name first, in
+`~/.config/helix/dadbod-connections`, and for one project in
+`.helix/dadbod-connections` (its entries win):
+
+```
+# name   where the URL comes from
+dev      postgres:///shop_dev
+staging  $STAGING_DATABASE_URL
+prod     !pass show databases/shop
+```
+
+After the name comes the URL itself, `$VARIABLE` for an environment variable
+that holds it, or `!command` for a command that prints it (its first line is
+taken). With the last two no password is in the file.
+
+- The URL is looked up when you ask for that connection: each time a query
+  runs against it, on `:db-use <name>`, and the first time dadbod-ui lists
+  its tables. Showing or listing connections looks nothing up.
+- A command runs through `sh` with no terminal, and Helix waits for it: it
+  can't ask you anything, so use one that answers by itself (`pass` with a
+  graphical pinentry or an unlocked agent).
+- **The project's file can't use `!command`.** That file comes with the
+  repository, and naming a connection must not run what someone else wrote.
+  It can replace a connection of yours by using the same name, so a
+  repository can point `prod` somewhere else: the result's first line always
+  says where a query ran.
+
+They can also be given in `init.scm`:
+
+```scheme
+(require "dadbod/dadbod/api.scm")
+(dadbod-connections! "dev" "postgres:///shop_dev"
+                     "prod" "!pass show databases/shop")
 ```
 
 ## Databases
@@ -68,7 +125,7 @@ Each adapter calls the database's own command line client, which has to be on
 | URL | Client | Notes |
 | --- | --- | --- |
 | `postgres://user:password@host:port/database?params` (also `postgresql://`) | `psql` | The part after `?` is passed to libpq as it is (`sslmode=require`, `host=/run/postgresql`, ...). `~/.psqlrc` applies. |
-| `mysql://user:password@host:port/database` | `mysql`, else `mariadb` | With a port the connection is forced to TCP; without one the client decides (a unix socket for `localhost`). No `?` parameters. |
+| `mysql://user:password@host:port/database?params` | `mysql`, else `mariadb` | With a port the connection is forced to TCP; without one the client decides (a unix socket for `localhost`). Parameters become the client's options of the same name: `ssl`, `ssl-ca`, `ssl-capath`, `ssl-cert`, `ssl-cipher`, `ssl-key`, `ssl-mode`, `ssl-verify-server-cert`, `protocol`, `socket`, `default-character-set`, `login-path` (`?ssl-ca=/etc/ca.pem`; `true` and `false` switch one on and off). A unix socket is `?socket=/path`. |
 | `mariadb://user:password@host:port/database` | `mariadb`, else `mysql` | The same. Where MariaDB also installs a `mysql` command that prints a deprecation warning, this scheme avoids it. |
 | `sqlite:relative/file.db`, `sqlite:///absolute/file.db` (also `sqlite3:`) | `sqlite3` | A relative path is relative to Helix's working directory. A file that doesn't exist is created, as `sqlite3` does. No `?` parameters. |
 
@@ -117,6 +174,7 @@ then in `~/.config/helix/init.scm`:
 
 ```scheme
 (require "dadbod/dadbod.scm")
+(require "dadbod/dadbod-ui.scm")    ; the drawer, if you want it
 ```
 
 and restart Helix. Without `forge`, put a checkout where Steel looks for
@@ -132,22 +190,28 @@ The full list, with what is planned, is in
 
 - One result buffer: a new run replaces the last result. Two runs at the same
   time both finish, and the one that finishes last is the one shown.
-- No named connections, no per-project connection file, no schema browser, no
-  completion (an SQL language server does that better).
+- No completion of table or column names (an SQL language server does that
+  better), and none of connection names at the prompt: Helix's plugin API
+  has no way to offer it.
 - Only the primary selection runs, not every selection.
 - stdout comes first in the result, then stderr, whatever order the client
   wrote them in.
-- No TLS or socket options for MySQL/MariaDB (they would be `?` parameters).
+- Only PostgreSQL, MySQL/MariaDB and SQLite.
 
 ## Development
 
 ```
-dadbod.scm        the plugin's entry: its typed commands
+dadbod.scm        dadbod's entry: its typed commands
 dadbod/
-  api.scm         what other plugins (dadbod-ui) may use
-  core/           no Helix: URLs, adapters, the client process, the session
+  api.scm         what other plugins (dadbod-ui) and init.scm may use
+  core/           no Helix: URLs, adapters, connections, the client process,
+                  the session
   hx/             Helix: the editor module and what the commands do
-dadbod-ui/        the companion plugin, not written yet
+dadbod-ui.scm     dadbod-ui's entry: its typed commands
+dadbod-ui/
+  config.scm      its options, for init.scm
+  core/           no Helix: the drawer's model, the query files
+  hx/             Helix: its editor module and the drawer
 tests/            lint, unit tests (core/), end-to-end tests (a real Helix)
 docs/
   DESIGN.md       how it is put together, and the rules that keep it so
