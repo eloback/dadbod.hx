@@ -1,22 +1,36 @@
+<div align="center">
+
 # dadbod.hx
 
-Run SQL from a [Helix](https://helix-editor.com/) buffer against a database and
-read the result in a split, in the spirit of
-[vim-dadbod](https://github.com/tpope/vim-dadbod).
+**Run SQL from [Helix](https://helix-editor.com/) and read the answer next to it.**
 
-It is a plugin for the Steel plugin system, so it needs Helix built from
-[mattwparas's `steel-event-system` fork](https://github.com/mattwparas/helix/blob/steel-event-system/STEEL.md).
+Two plugins for Helix's Steel plugin system, in the spirit of
+[vim-dadbod](https://github.com/tpope/vim-dadbod) and
+[vim-dadbod-ui](https://github.com/kristijanhusak/vim-dadbod-ui).
 
-The repository holds two plugins, loaded separately:
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Helix: Steel fork](https://img.shields.io/badge/helix-steel--event--system-8a5cf5.svg)](https://github.com/mattwparas/helix/blob/steel-event-system/STEEL.md)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791.svg?logo=postgresql&logoColor=white)
+![MySQL / MariaDB](https://img.shields.io/badge/MySQL%20%2F%20MariaDB-00758f.svg?logo=mariadb&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003b57.svg?logo=sqlite&logoColor=white)
 
-- **dadbod**: `:db-run` and its companions, for PostgreSQL, MySQL/MariaDB and
-  SQLite. This page.
-- **dadbod-ui**: `:dbui`, a drawer of your connections, their tables and
-  saved queries, in the manner of vim-dadbod-ui.
-  [dadbod-ui/README.md](dadbod-ui/README.md).
+[Usage](#usage) · [Connections](#connections) · [Databases](#databases) ·
+[The drawer](dadbod-ui/README.md) · [Security](#security) · [Install](#install)
 
-[docs/FEATURES.md](docs/FEATURES.md) compares both with their Vim
-counterparts, feature by feature.
+<img src="docs/demo.gif" alt="Running a buffer, a selection and a typed query against a database, then browsing its tables in the drawer" width="820">
+
+</div>
+
+- **dadbod** runs a buffer, a selection or a typed query through the
+  database's own command line client and shows the result in a split:
+  `:db-run`, `:db-use`, `:db-query`, `:db-rerun`, `:db-cancel`. This page.
+- **dadbod-ui** is a drawer of your connections, their tables and saved
+  queries: `:dbui`. [dadbod-ui/README.md](dadbod-ui/README.md).
+
+They are loaded separately, and need Helix built from
+[mattwparas's `steel-event-system` fork](https://github.com/mattwparas/helix/blob/steel-event-system/STEEL.md),
+where the plugin system lives. [docs/FEATURES.md](docs/FEATURES.md) compares
+both with their Vim counterparts, feature by feature.
 
 ## Usage
 
@@ -285,6 +299,16 @@ devenv test          # everything; quiet unless something fails
 `tests/e2e.sh` starts Helix in a tmux server of its own (own socket, no
 config, scratch `HOME`) and throwaway PostgreSQL and MariaDB servers in a
 temporary directory. `E2E_KEEP=1` keeps that directory after a failure.
+
+### The demo
+
+`docs/demo.gif` and `docs/demo.cast` (an [asciinema](https://asciinema.org)
+recording: `asciinema play docs/demo.cast`) are made by a script, so they can
+be redone when the plugins change:
+
+```sh
+nix shell nixpkgs#asciinema nixpkgs#asciinema-agg -c devenv shell -- dev/record-demo.sh
+```
 
 ### Trying a change
 
