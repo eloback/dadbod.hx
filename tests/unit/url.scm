@@ -84,6 +84,14 @@
               (parts "postgres://host?sslmode=disable")
               (list "postgres" #f #f "host" #f "" "sslmode=disable"))
 
+(define (params text)
+  (db-url-params (parse-url text)))
+
+(check-equal? "params: pairs in order, decoded; none without a query"
+              (list (params "mysql://h/d?ssl-ca=%2Fetc%2Fca.pem&ssl=true&flag&x=a%3Db") (params "mysql://h/d"))
+              (list (list (cons "ssl-ca" "/etc/ca.pem") (cons "ssl" "true") (cons "flag" "") (cons "x" "a=b"))
+                    '()))
+
 (check-equal? "url: opaque path" (parts "sqlite:data/notes.db") (list "sqlite" #f #f #f #f "data/notes.db" #f))
 
 (check-equal? "url: opaque absolute path"

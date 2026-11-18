@@ -27,21 +27,44 @@
 
 ;;; Which database
 
+;; A session where "sqlite:old.db" was used last and the buffer "a.sql" has
+;; "prod" chosen for it.
+(define chosen (use-for-buffer (remember-url (new-session) "sqlite:old.db") "a.sql" "prod"))
+
 (check-equal? "url: the one given now wins, and its words are joined"
-              (resolve-url (remember-url (new-session) "sqlite:old.db") (list "sqlite:my" "file.db") "sqlite:env.db")
+              (resolve-url chosen (list "sqlite:my" "file.db") "a.sql" "sqlite:env.db")
               "sqlite:my file.db")
 
-(check-equal? "url: else the one remembered"
-              (resolve-url (remember-url (new-session) "sqlite:old.db") '() "sqlite:env.db")
-              "sqlite:old.db")
+(check-equal? "url: else the one chosen for the buffer"
+              (resolve-url chosen '() "a.sql" "sqlite:env.db")
+              "prod")
+
+(check-equal? "url: else the one used last"
+              (list (resolve-url chosen '() "b.sql" "sqlite:env.db") (resolve-url chosen '() #f "sqlite:env.db"))
+              (list "sqlite:old.db" "sqlite:old.db"))
 
 (check-equal? "url: else the environment's"
-              (resolve-url (new-session) '() "sqlite:env.db")
+              (resolve-url (new-session) '() "a.sql" "sqlite:env.db")
               "sqlite:env.db")
 
 (check-equal? "url: else an error"
-              (error-message (lambda () (resolve-url (new-session) '() #f)))
-              "no database: give a URL (:db-run postgres://user@host/db) or set $DATABASE_URL")
+              (error-message (lambda () (resolve-url (new-session) '() "a.sql" #f)))
+              (string-append "no database: give a URL (:db-run postgres://user@host/db) or a "
+                             "connection's name, or set $DATABASE_URL"))
+
+(check-equal? "buffer: a choice is per buffer, and can be taken back"
+              (list (buffer-url chosen "a.sql")
+                    (buffer-url chosen "b.sql")
+                    (buffer-url chosen #f)
+                    (buffer-url (use-for-buffer chosen "a.sql" #f) "a.sql"))
+              (list "prod" #f #f #f))
+
+(check-equal? "last: the last run is remembered, through later runs"
+              (let* ([s (remember-last (new-session) "prod" "select 1;")]
+                     [started (start-run s 'show "sqlite:a.db" 0)]
+                     [finished (finish-run (step-session started) 1 #f 10)])
+                (list (session-last (new-session)) (session-last (step-session finished))))
+              (list #f (cons "prod" "select 1;")))
 
 ;;; Starting and finishing
 

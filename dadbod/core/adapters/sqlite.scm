@@ -28,4 +28,15 @@
                       (list (if (starts-with? path "-") (string-append "./" path) path)))
               '()))
 
-(define sqlite (adapter "SQLite" (list "sqlite" "sqlite3") build))
+(define tables
+  (string-append "select name from sqlite_master"
+                 " where type in ('table', 'view') and name not like 'sqlite_%'"
+                 " order by name;"))
+
+(define helpers
+  (list (cons "List" "select * from {table} limit 200;")
+        (cons "Columns" "pragma table_info('{name}');")
+        (cons "Indexes" "pragma index_list('{name}');")
+        (cons "Foreign Keys" "pragma foreign_key_list('{name}');")))
+
+(define sqlite (adapter "SQLite" (list "sqlite" "sqlite3") build tables helpers #f "\""))

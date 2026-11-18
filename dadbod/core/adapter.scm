@@ -23,6 +23,11 @@
          adapter-name
          adapter-schemes
          adapter-build
+         adapter-tables
+         adapter-helpers
+         adapter-default-schema
+         adapter-mark
+         expand-helper
          invocation
          invocation?
          invocation-programs
@@ -45,7 +50,50 @@
 ;;          meant to be read:
 ;;            'table  by a person: aligned, with headers
 ;;            'plain  by a program: one row per line, no headers or borders
-(struct adapter (name schemes build))
+;;
+;; For a plugin that browses the database (dadbod-ui):
+;;
+;; tables   SQL that lists the tables and views, one name per row: bare for
+;;          the default schema, schema.table for the others
+;; helpers  ready-made queries about one table, as (name . template) pairs
+;;          in the order to offer them; see expand-helper
+;; default-schema
+;;          the schema a bare table name is in, or #f when the database has
+;;          none to name
+;; mark     the character identifiers are quoted with: " or `
+(struct adapter (name schemes build tables helpers default-schema mark))
+
+(define (doubling text ch)
+  (string-replace text ch (string-append ch ch)))
+
+;; A helper's SQL for a table. The table's name comes from the database and
+;; can be anything, so it never goes into the SQL as it is. In the template,
+;;   {table}          is the table as an identifier, quoted, with its schema
+;;                    where the database has schemas: "public"."books"
+;;   {table-literal}  the same, for inside a string: 'x'::regclass
+;;   {schema}         its schema, for inside a string: the default one for a
+;;                    bare name, "" where there are none
+;;   {name}           its name without the schema, for inside a string
+;; A name is only split at a dot where the database has schemas: elsewhere a
+;; dot is part of the name.
+(define (expand-helper template table default-schema mark)
+  (define parts (split-many table "."))
+  (define qualified? (and default-schema (not (null? (cdr parts))) (null? (cddr parts))))
+  (define schema (if qualified? (car parts) (or default-schema "")))
+  (define name (if qualified? (cadr parts) table))
+  (define (identifier text)
+    (string-append mark (doubling text mark) mark))
+  (define (in-string text)
+    (doubling text "'"))
+  (define quoted
+    (if default-schema
+        (string-append (identifier schema) "." (identifier name))
+        (identifier name)))
+  (~> template
+      (string-replace "{table-literal}" (in-string quoted))
+      (string-replace "{table}" quoted)
+      (string-replace "{schema}" (in-string schema))
+      (string-replace "{name}" (in-string name))))
 
 (define (strip-leading-slash path)
   (if (starts-with? path "/")

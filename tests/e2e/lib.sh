@@ -151,6 +151,16 @@ keys() {
   tm send-keys "$@"
 }
 
+# Types text as it is. tmux takes a ";" at the end of an argument for its
+# own command separator unless it is escaped.
+type_text() {
+  local text=$1
+  if [[ $text == *";" ]]; then
+    text="${text%;}\\;"
+  fi
+  tm send-keys -l "$text"
+}
+
 # Waits until Helix is in normal mode: only the focused window's status line
 # shows the mode.
 #
@@ -169,8 +179,38 @@ leave_insert_mode() {
 # A typed command, from normal mode.
 cmd() {
   normal_mode
-  keys -l ":$1"
+  type_text ":$1"
   keys Enter
+}
+
+# find_line <text>: puts the cursor on the first line that has the text, by
+# searching for it. For the drawer, whose lines are told apart by their text.
+find_line() {
+  normal_mode
+  keys /
+  keys -l "$1"
+  keys Enter
+  # Until the search has landed: it selects the match, so the cursor is past
+  # column 1, where the drawer leaves it. A key sent before that would act on
+  # the line the cursor was on.
+  wait_for "find '$1'" 'NOR .* [0-9]+:([2-9]|[0-9][0-9]+) *$' -E
+}
+
+# select_line <text>: presses Enter on that line.
+select_line() {
+  find_line "$1"
+  trace "found '$1'"
+  keys Enter
+  trace "selected '$1'"
+}
+
+# With E2E_TRACE=1: the screen, a moment after a step, on stderr.
+trace() {
+  if [[ -n ${E2E_TRACE:-} ]]; then
+    sleep 0.7
+    echo "----- trace: $1 -----" >&2
+    screen | grep -v '^[[:space:]]*~\?[[:space:]]*$' >&2 || true
+  fi
 }
 
 # open <file>: opens a file in the running Helix and waits until it is the
@@ -208,14 +248,23 @@ hx_start() {
   hx_run "$ROOT" "$ROOT/.helix" "$1"
 }
 
+# Installs the repository as the package `dadbod` in the scratch HOME's Steel
+# package directory, once. (A second `ln -s` would follow the first link and
+# put a link inside the repository.)
+install_package() {
+  local cogs="$WORK/home/.local/share/steel/cogs"
+  mkdir -p "$cogs"
+  [[ -e $cogs/dadbod ]] || ln -s "$ROOT" "$cogs/dadbod"
+}
+
 # Starts Helix on a file, with the repository installed as the package
 # `dadbod` in Steel's package directory, and an init.scm that requires
 # dadbod by its package name, as the README says to, plus a second plugin
 # that uses dadbod's API (tests/fixtures/api-consumer).
 hx_start_installed() {
   if [[ ! -d $WORK/installed ]]; then
-    mkdir -p "$WORK/home/.local/share/steel/cogs" "$WORK/installed"
-    ln -s "$ROOT" "$WORK/home/.local/share/steel/cogs/dadbod"
+    install_package
+    mkdir -p "$WORK/installed"
     echo ';; no commands of its own' >"$WORK/installed/helix.scm"
     {
       echo '(require "dadbod/dadbod.scm")'

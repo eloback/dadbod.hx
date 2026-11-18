@@ -12,7 +12,8 @@
          append-to-file!
          delete-file-quietly!
          file-bytes
-         make-private-dir!)
+         make-private-dir!
+         command-output)
 
 ;; The variable's value, or #f when it is unset or empty.
 (define (getenv name)
@@ -76,3 +77,26 @@
   (unless (and made (is-dir? made))
     (error "could not make a private directory for the query and result files (mktemp -d failed)"))
   made)
+
+;; What the shell command `text` prints. Raises when it can't be run or
+;; exits with an error. Blocks until it is done.
+;;
+;; The command gets no terminal: its input is empty and its error output is
+;; dropped. Left as they are, both would be Helix's own, so a command that
+;; asks something would take the user's keys, and what it prints would land
+;; on the screen. (A piped error output nobody reads would block it instead,
+;; once full.)
+(define (command-output text)
+  (define spawned
+    (~> (command "sh" (list "-c" (string-append "exec </dev/null 2>/dev/null\n" text)))
+        with-stdout-piped
+        with-stderr-piped
+        spawn-process))
+  (when (Err? spawned)
+    (error "could not start sh"))
+  (define child (Ok->value spawned))
+  (define output (read-port-to-string (child-stdout child)))
+  (define status (wait child))
+  (unless (and (Ok? status) (equal? (Ok->value status) 0))
+    (error "it exited with an error"))
+  output)

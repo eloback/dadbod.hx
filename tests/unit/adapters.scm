@@ -176,15 +176,81 @@
               (run-as "mariadb://root@db/app" 'table)
               (list (list "mariadb" "mysql") (list "--table" "--host" "db" "--user" "root" "--database=app") '()))
 
-(check-equal? "mysql: query parameters are refused, not dropped"
-              (map adapter-error
-                   (list "mysql://host/db?ssl-mode=REQUIRED" "mariadb://host/db?socket=/run/mysqld.sock"))
-              (list "query parameters (the part after '?') are not supported in mysql URLs"
-                    "query parameters (the part after '?') are not supported in mariadb URLs"))
+(check-equal? "mysql: listed parameters become the client's options"
+              (args-of "mysql://app@db/shop?ssl-mode=REQUIRED&ssl-ca=%2Fetc%2Fca.pem" 'table)
+              (list "--table" "--host" "db" "--user" "app" "--ssl-mode=REQUIRED" "--ssl-ca=/etc/ca.pem" "--database=shop"))
+
+(check-equal? "mysql: true and false switch an option on and off"
+              (args-of "mariadb://db/shop?ssl=true&ssl-verify-server-cert=false" 'table)
+              (list "--table" "--host" "db" "--ssl" "--skip-ssl-verify-server-cert" "--database=shop"))
+
+(check-equal? "mysql: --login-path goes first, where the client wants it"
+              (args-of "mysql:///shop?ssl=true&login-path=prod" 'table)
+              (list "--login-path=prod" "--table" "--ssl" "--database=shop"))
+
+(check-equal? "mysql: a socket as a parameter"
+              (args-of "mysql://app@/shop?socket=/run/mysqld/mysqld.sock" 'table)
+              (list "--table" "--user" "app" "--socket=/run/mysqld/mysqld.sock" "--database=shop"))
+
+(check-equal? "mysql: a socket where the host goes, percent-encoded"
+              (args-of "mysql://app@%2Frun%2Fmysqld%2Fmysqld.sock/shop" 'table)
+              (list "--table" "--socket=/run/mysqld/mysqld.sock" "--user" "app" "--database=shop"))
+
+(check-equal? "mysql: an option that takes a value needs one, or it would swallow the next argument"
+              (map adapter-error (list "mysql://h/db?ssl-ca" "mysql://h/db?socket=" "mysql://h/db?ssl=maybe"))
+              (list "the parameter 'ssl-ca' needs a value"
+                    "the parameter 'socket' needs a value"
+                    "the parameter 'ssl' is true or false"))
+
+(check-equal? "mysql: a socket where the host goes, with a port, is an error"
+              (adapter-error "mysql://u@%2Ftmp%2Fm.sock:3306/db")
+              "a mysql URL names a socket or a port, not both")
+
+(check-equal? "mysql: a parameter that isn't listed is refused, not dropped"
+              (adapter-error "mysql://host/db?init-command=drop")
+              (string-append "'init-command' is not a parameter mysql URLs support (ssl, ssl-ca, ssl-capath, "
+                             "ssl-cert, ssl-cipher, ssl-key, ssl-mode, ssl-verify-server-cert, protocol, "
+                             "socket, default-character-set, login-path)"))
 
 (check-equal? "mysql: without // is an error"
               (adapter-error "mysql:app:secret@host/db")
               "mysql URLs need the // after the scheme, like mysql://user@host/database")
+
+;;; What an adapter knows about the catalog
+
+(check-equal? "catalog: every adapter lists tables and offers a List helper first"
+              (map (lambda (a)
+                     (list (string? (adapter-tables a)) (car (car (adapter-helpers a)))))
+                   adapters)
+              (list (list #t "List") (list #t "List") (list #t "List")))
+
+(define all-placeholders "{table} / {table-literal} / {schema} / {name}")
+
+(check-equal? "helper: a bare table is in the default schema, and quoted"
+              (expand-helper all-placeholders "books" "public" "\"")
+              "\"public\".\"books\" / \"public\".\"books\" / public / books")
+
+(check-equal? "helper: a qualified table names its schema; case is kept by the quotes"
+              (expand-helper all-placeholders "sales.Orders" "public" "\"")
+              "\"sales\".\"Orders\" / \"sales\".\"Orders\" / sales / Orders")
+
+(check-equal? "helper: without schemas a dot is part of the name"
+              (expand-helper all-placeholders "my.table" #f "`")
+              "`my.table` / `my.table` /  / my.table")
+
+(check-equal? "helper: a name can't break out of its quotes, as an identifier or in a string"
+              (list (expand-helper "select * from {table}; -- '{name}' '{table-literal}'" "a\"b'c" #f "\"")
+                    (expand-helper "show columns from {table};" "x`; drop table y; --" #f "`"))
+              (list "select * from \"a\"\"b'c\"; -- 'a\"b''c' '\"a\"\"b''c\"'"
+                    "show columns from `x``; drop table y; --`;"))
+
+(check-equal? "helper: every placeholder of every helper is one of the three"
+              (filter (lambda (sql) (string-contains? sql "{"))
+                      (apply append
+                             (map (lambda (a)
+                                    (map (lambda (h) (expand-helper (cdr h) "s.t" "public" "\"")) (adapter-helpers a)))
+                                  adapters)))
+              '())
 
 ;;; SQLite
 

@@ -19,6 +19,7 @@
          db-url-port
          db-url-path
          db-url-query
+         db-url-params
          db-url-without-password
          db-url-display
          percent-decode)
@@ -35,6 +36,20 @@
 ;; display           without-password minus the query: safe to show
 (struct db-url
         (scheme authority? user password host port path query without-password display))
+
+;; The query string as (name . value) pairs, in order, both percent-decoded.
+;; A parameter without "=" has the value "".
+(define (db-url-params url)
+  (define query (db-url-query url))
+  (define (pair part)
+    (define equals (index-of-any part (list #\=)))
+    (if equals
+        (cons (percent-decode (substring part 0 equals))
+              (percent-decode (substring part (+ equals 1) (string-length part))))
+        (cons (percent-decode part) "")))
+  (if query
+      (map pair (filter (lambda (part) (> (string-length part) 0)) (split-many query "&")))
+      '()))
 
 (define (index-of-any s chars)
   (define len (string-length s))

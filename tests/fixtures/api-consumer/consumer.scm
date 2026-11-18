@@ -22,20 +22,20 @@
 
 ;; Which database dadbod would run against, without the password.
 (define (consumer-url)
-  (define url (dadbod-current-url))
-  (say "url=" (if url (dadbod-url-display url) "none"))
+  (define url (dadbod-current))
+  (say "url=" (if url (dadbod-display url) "none"))
   void)
 
 (define (consumer-use url-text)
   (with-handler (lambda (err) (say "refused: " (trim (error-object-message err))))
                 (begin
-                  (dadbod-use-url! url-text)
-                  (say "using " (dadbod-url-display url-text))))
+                  (dadbod-use! url-text)
+                  (say "using " (dadbod-display url-text))))
   void)
 
 ;; Asks the current database a question and reads the answer itself.
 (define (consumer-answer . sql)
-  (dadbod-query! (dadbod-current-url)
+  (dadbod-query! (dadbod-current)
                  (if (null? sql) "select 40 + 2;" (string-join sql " "))
                  (lambda (failure stdout-file stderr-file)
                    (if failure
@@ -45,5 +45,5 @@
 
 ;; Runs a query of its own through dadbod's result split.
 (define (consumer-run)
-  (dadbod-run! (dadbod-current-url) "select 'from the consumer' as origin;")
+  (dadbod-run! (dadbod-current) "select 'from the consumer' as origin;")
   void)

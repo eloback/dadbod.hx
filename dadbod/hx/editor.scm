@@ -9,6 +9,7 @@
 (require "helix/misc.scm")
 (require "helix/static.scm")
 (require "helix/ext.scm")
+(require "helix/keymaps.scm")
 (require (prefix-in helix. "helix/commands.scm"))
 (require-builtin helix/core/text as text.)
 
@@ -17,6 +18,9 @@
          selection-text
          buffer-text
          focused-path
+         buffer-key
+         workspace-dir
+         set-extension-keys!
          normal-mode?
          run-when-normal!
          run-later!
@@ -49,6 +53,25 @@
 (define (focused-path)
   (define path (editor-document->path (focused-doc)))
   (and (string? path) path))
+
+;; What a choice made for the focused buffer is kept under: its file's
+;; path, or for a scratch buffer its number in this session.
+(define (buffer-key)
+  (or (focused-path)
+      (string-append "scratch:" (number->string (doc-id->usize (focused-doc))))))
+
+;; The directory Helix was started in: the project.
+(define (workspace-dir)
+  (get-helix-cwd))
+
+;;; Keys
+
+;; Gives files with the extension `extension` (no dot) keys of their own in
+;; normal mode, on top of the usual ones. `keys` is a hash from a key
+;; ("R", "C-c") to what it does (":db-rerun").
+(define (set-extension-keys! extension keys)
+  (set-global-buffer-or-extension-keymap
+   (hash extension (merge-keybindings (deep-copy-global-keybindings) (hash "normal" keys)))))
 
 ;;; Modes
 

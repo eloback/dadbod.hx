@@ -11,23 +11,49 @@
 (require "dadbod/hx/commands.scm")
 
 (provide db-run
+         db-query
+         db-rerun
+         db-use
          db-cancel)
+
 
 ;;@doc
 ;; Run SQL against a database and show the result in a split.
 ;;
 ;; Runs the primary selection, or the whole buffer when nothing is selected.
 ;;
-;; :db-run <url>  runs against <url> and remembers it for this session
-;; :db-run        runs against the remembered URL, else $DATABASE_URL
+;; :db-run <database>  runs against it, and chooses it for this buffer
+;; :db-run             runs against this buffer's database, else the one used
+;;                     last, else $DATABASE_URL
 ;;
-;; URLs: postgres://user:password@host:port/database
-;;       mysql://user:password@host:port/database   (also mariadb://)
-;;       sqlite:relative/file.db   sqlite:///absolute/file.db
+;; A database is a connection's name or a URL:
+;;   postgres://user:password@host:port/database
+;;   mysql://user:password@host:port/database   (also mariadb://)
+;;   sqlite:relative/file.db   sqlite:///absolute/file.db
 (define (db-run . args)
   (run-command! args)
   ;; Helix shows a typed command's return value in the status line, where it
   ;; would replace the command's own message.
+  void)
+
+;;@doc
+;; Run the query typed after the command, against this buffer's database:
+;; :db-query select count(*) from users
+(define (db-query . words)
+  (query-command! words)
+  void)
+
+;;@doc
+;; Run the last query again, against the same database.
+(define (db-rerun)
+  (rerun-command!)
+  void)
+
+;;@doc
+;; Choose the database of this buffer: :db-use <connection or URL>.
+;; Without one, show which database is in use and the connections there are.
+(define (db-use . args)
+  (use-command! args)
   void)
 
 ;;@doc

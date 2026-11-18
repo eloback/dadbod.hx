@@ -67,3 +67,23 @@ ok "mariadb: the server is no longer running it"
 HX_ENV="DATABASE_URL='mariadb://app:s3cret@127.0.0.1:$port/shop'" hx_start_installed "$WORK/my.sql"
 cmd "consumer-answer select title from books order by id;"
 expect "mariadb: a quiet query gives rows only" "consumer: answer=Solaris"
+
+# A unix socket, as a parameter: root has no password on the socket.
+hx_start "$WORK/my.sql"
+cmd "db-run mariadb://root@/shop?socket=$WORK/mysql.sock"
+expect "mariadb: a unix socket as a URL parameter" "-- mariadb://root@/shop"
+expect "mariadb: rows over the socket" "| Kindred |"
+cmd "db-run mariadb://root@/shop?init-command=x"
+expect "mariadb: a parameter that isn't supported is refused" "db-run: 'init-command' is not a parameter mysql URLs support"
+
+# The drawer, on a database given by $DATABASE_URL: its tables and a helper.
+HX_ENV="DATABASE_URL='mariadb://app:s3cret@127.0.0.1:$port/shop'" hx_start "$WORK/my.sql"
+cmd "dbui"
+expect "mariadb: the database in use is in the drawer" "▸ current database  mariadb://app@127.0.0.1"
+select_line "current database"
+select_line "Tables"
+expect "mariadb: its tables are listed" "▸ books"
+select_line "books"
+select_line "Columns"
+expect "mariadb: a table helper runs" "| Field "
+expect "mariadb: and answers about that table" "| title "
