@@ -36,9 +36,11 @@ Scheme side of the bindings in `helix-term/src/commands/engine/steel/*.scm`
 
 - **Moving the focus puts Helix in normal mode.** `editor-set-focus!`, and
   commands that open a window (`helix.hsplit`), end insert mode. Doing that
-  from a callback while the user types turns their next keys into commands.
-  Check `(equal? (editor-mode) (string->editor-mode "normal"))` first and
-  wait otherwise (`run-when-normal!`).
+  from a callback while the user types turns their next keys into commands:
+  check `(equal? (editor-mode) (string->editor-mode "insert"))` first and
+  wait until it is over (`run-when-not-typing!`). Don't wait for normal mode:
+  after a selection made with `v`, a typed command leaves Helix in select
+  mode for as long as the user likes.
 - **`current-highlighted-text!` is the primary selection.**
   `current-selection->string`, despite the name, is the single character
   under the cursor.
@@ -58,6 +60,17 @@ Scheme side of the bindings in `helix-term/src/commands/engine/steel/*.scm`
   label. Its text is replaced with `select_all` and `replace-selection-with`.
 - **Helix doesn't scroll to the cursor** after a command run from a callback
   (a prompt's answer, a timer): call `align_view_center`.
+- **A floating component** (`(require-builtin helix/components)`):
+  `(push-component! (new-component! name state render (hash "handle_event"
+  handler)))`. `render` gets `(state rect frame)` each frame and draws with
+  `buffer/clear`, `block/render` (`make-block style border-style "all"
+  "rounded"`), `frame-set-string!` and styles from `(theme-scope *helix.cx*
+  "ui.popup")`. The handler gets each event: `key-event?`, `key-event-char`,
+  `key-event-enter?`, `-escape?`, `-up?`, `-down?`, and returns
+  `event-result/consume` (keep the key from the editor) or
+  `event-result/close`. Editor commands work inside the handler, and a
+  prompt pushed from it sits on top. Changing state from a callback is shown
+  at the next frame without doing anything.
 - **`(push-component! (prompt label callback))`** asks for a line of text at
   the bottom of the screen; editor commands work inside its callback.
 - **The `document-saved` hook can run before the file on disk has the new

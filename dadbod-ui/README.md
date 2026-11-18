@@ -15,25 +15,27 @@ dadbod's:
 
 ## Usage
 
-`:dbui` opens the drawer in the current window:
+`:dbui` opens the drawer, floating over the editor the way Helix's pickers
+do:
 
 ```
-dadbod-ui    ? for help
-▾ shop
-    + New query
-  ▾ Saved queries (2)
-      monthly-report.sql
-      query-1.sql
-  ▾ Tables (3)
-    ▸ authors
-    ▾ books
-        List
-        Columns
-        Indexes
-        Primary Key
-        Foreign Keys
-▸ staging
-▸ current database  postgres://app@localhost/shop
+╭─ dadbod-ui ──────────────────────────────────────╮
+│▾ shop
+│    + New query
+│  ▾ Saved queries (2)
+│      monthly-report.sql
+│      query-1.sql
+│  ▾ Tables (3)
+│    ▸ authors
+│    ▾ books
+│        List
+│        Columns
+│        Indexes
+│        Primary Key
+│        Foreign Keys
+│▸ staging
+│▸ current database  postgres://app@localhost/shop
+╰─ ? help   ret open   q close ────────────────────╯
 ```
 
 It lists your [connections](../README.md#connections), and after them the
@@ -42,15 +44,17 @@ database dadbod is using when that isn't one of them (a URL you gave to
 
 | Key | |
 | --- | --- |
-| `ret`, `o` | Open or close what is under the cursor. On **New query**, a saved query or a helper: open it. |
+| `j`, `k` | Move down and up. Also the arrow keys, `g` for the first line and `G` for the last. |
+| `ret`, `o`, `l` | Open or close what is under the cursor. On **New query**, a saved query or a helper: open it, which closes the drawer. |
 | `R` | Ask the database under the cursor for its tables again, and reread its saved queries. |
 | `A` | Add a connection: type its name, a space, and its URL (or `$VARIABLE`, or `!command`). It is written to `~/.config/helix/dadbod-connections`. What you type is visible and the file is plain text, so a URL with a password in it is refused. |
 | `d` | Delete the saved query under the cursor, after asking. |
 | `?` | Show or hide these keys. |
-| `q` | Close the drawer. `:dbui` brings it back as you left it. |
+| `q`, `esc` | Close the drawer. `:dbui` brings it back as you left it. |
 
-The drawer takes the whole window instead of sitting beside your files:
-Helix can't give a split a width, so a side panel would take half the screen.
+While it is open the drawer gets every key, and your buffers stay as they
+are underneath. It floats rather than sitting beside them because Helix
+can't give a split a width: a side panel would take half the screen.
 
 - **Tables** are asked from the database the first time the section is
   opened. If it can't be reached, the reason is shown in their place.
@@ -63,9 +67,6 @@ Helix can't give a split a width, so a side panel would take half the screen.
   better name, rename it inside its folder, with Helix's `:move` and the
   full path: `:move ~/.local/share/dadbod-ui/shop/monthly-report.sql`. (A
   bare name would move it to Helix's working directory, out of the drawer.)
-- **Pressing a key on a line that has changed** since the drawer was drawn
-  (tables arrived while you were in another window) only redraws it: press
-  again on what you now see.
 
 Query files are kept per database in `~/.local/share/dadbod-ui/<name>/`
 (`$XDG_DATA_HOME/dadbod-ui`). Every `.sql` file there is a saved query of

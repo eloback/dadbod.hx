@@ -96,7 +96,7 @@ The plugin API exists only in an unmerged fork and will change. Every other
 file asks `editor.scm` for what it needs in dadbod's terms (`selection-text`,
 `show-in-split!`, `run-when-normal!`), so an API change is fixed in one file.
 dadbod-ui has its own, `dadbod-ui/hx/editor.scm`, for what a drawer needs:
-a panel, a prompt, hooks.
+a floating list, a prompt, a hook.
 
 ### The session is a pure state machine
 
@@ -154,12 +154,19 @@ the drawer is not a query.
 `dadbod-ui/core/drawer.scm` is the drawer as a pure model: the databases,
 what is expanded, what is known about each, the lines that makes, and what
 selecting a line asks for, as data (`(load-tables "shop")`). It knows nothing
-of dadbod. `dadbod-ui/hx/drawer.scm` keeps the one drawer, draws its lines
-into a named scratch buffer with keys of its own, and carries the actions
-out through `api.scm`. Tables arrive later, through a callback; the drawer
-is only redrawn while it is what the user is looking at. So the lines last
-drawn are kept: the cursor is read against those, and a key pressed while
-they differ from the model only redraws.
+of dadbod. `dadbod-ui/hx/drawer.scm` keeps the one drawer and the cursor's
+line, and carries the actions out through `api.scm`.
+
+It is shown as a floating component (`open-float!` in
+`dadbod-ui/hx/editor.scm`), like Helix's pickers: a box over the editor that
+gets every key while it is open. Helix asks the component to draw itself
+each frame, and it draws the model as it is then, so there is nothing to
+keep in step: tables that arrive later, through a callback, are simply there
+at the next frame. A change to the model keeps the cursor on the node it was
+on (`keeping-cursor`).
+
+It was first a buffer, the way oil.hx is. That took the place of what the
+user was looking at, and a buffer's text can drift from the model.
 
 Table names come from the database and can be anything. A helper's template
 never gets one as it is: `expand-helper` quotes it as an identifier or

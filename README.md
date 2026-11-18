@@ -51,8 +51,8 @@ runs the buffer against that database and opens the result below it:
 - **Errors.** The client stops at the first failing statement. Its error
   message is in the result, and the status line reports the exit code.
 - **Slow queries** don't freeze the editor: the client runs on its own thread
-  and the result appears when it is done. If you are in insert or select
-  mode at that moment, it appears once you are back in normal mode.
+  and the result appears when it is done. If you are typing in insert mode
+  at that moment, it appears once you leave it.
 - **`:db-cancel`** stops the newest query still running. It asks the
   database to cancel the statement, so the server stops working on it, and
   what the query had produced so far is shown. For a client that doesn't

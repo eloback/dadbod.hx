@@ -65,7 +65,7 @@ someone needs it) · **no**.
 - Cancelling asks the database to cancel the statement (vim-dadbod stops the
   client, and the server may go on running it).
 - Ambiguous URLs and unsupported parameters are errors.
-- A result that arrives while typing waits for normal mode.
+- A result that arrives while typing waits until insert mode is left.
 
 ## vim-dadbod-ui
 
@@ -73,15 +73,14 @@ It is the second plugin of this repository
 ([dadbod-ui/README.md](../dadbod-ui/README.md)): `dadbod-ui.scm` and
 `dadbod-ui/`, using dadbod through `dadbod/api.scm`.
 
-**How it is built.** The drawer is a buffer, the way oil.hx is: text in a
-scratch buffer, redrawn from a model, with a keymap that only applies to that
-buffer. That is a known-good pattern in this API. The model (the tree, what is
-expanded, what each line means) is pure and goes in `dadbod-ui/core/`, tested
-like dadbod's; only drawing and keys touch Helix.
+**How it is built.** The drawer is a floating component over the editor,
+like Helix's pickers, drawn from a model each frame. The model (the tree,
+what is expanded, what each line means) is pure and is in
+`dadbod-ui/core/`, tested like dadbod's; only drawing and keys touch Helix.
 
 | vim-dadbod-ui | Needs from dadbod | Verdict |
 | --- | --- | --- |
-| A drawer listing connections, toggled by a command | `:dbui`; it takes the window instead of sitting beside it, since Helix can't size a split | **have** |
+| A drawer listing connections, toggled by a command | `:dbui`; it floats over the editor like a picker instead of sitting beside it, since Helix can't size a split | **have** |
 | Connections from an environment variable, from configuration, from a saved file (`:DBUIAddConnection`) | dadbod's connections, plus the database in use; `A` in the drawer adds one to the user's file | **have** |
 | Schemas and tables under each connection | Tables, asked from the database when the section is first opened; other schemas' tables as `schema.table` | **have**, without schemas as a level of their own: **maybe**. |
 | Table helpers: List, Columns, Indexes, Foreign Keys, Primary Keys (PostgreSQL also References), and your own | The same five per adapter (SQLite has no separate Primary Key), run when chosen | **have** the built-in ones. Your own: **later**, with registering adapters. |
