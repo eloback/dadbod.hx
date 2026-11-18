@@ -74,6 +74,14 @@
                     (list "dev" "sqlite:project-dev.db" "project")
                     (list "test" "sqlite:t.db" "project")))
 
+(check-equal? "add-new: names already there are kept as they are, and reported"
+              (let ([added (add-new-connections user project)])
+                (list (map described (car added)) (cadr added)))
+              (list (list (list "prod" "sqlite:user-prod.db" "user")
+                          (list "dev" "sqlite:user-dev.db" "user")
+                          (list "test" "sqlite:t.db" "project"))
+                    (list "dev")))
+
 (check-equal? "merge: nothing" (merge-connections (list '() '())) '())
 
 (check-equal? "find: by name, or #f"

@@ -9,12 +9,17 @@ fi
 echo "== mariadb"
 # Below the range Linux hands out to outgoing connections (32768 and up).
 port=$((20000 + RANDOM % 12000))
-mariadb-install-db --no-defaults --datadir="$WORK/mysql" --auth-root-authentication-method=normal >/dev/null 2>&1
+# The administrator logs in through the socket only, as the user who runs
+# the test (the socket is in the work directory, which is private): over TCP
+# there is just the test's own user, with its password. The server can't
+# read or write files for a client.
+mkdir -p "$WORK/mysql-files"
+mariadb-install-db --no-defaults --datadir="$WORK/mysql" >/dev/null 2>&1
 mariadbd --no-defaults --datadir="$WORK/mysql" --socket="$WORK/mysql.sock" --pid-file="$WORK/mysql.pid" \
-  --bind-address=127.0.0.1 --port="$port" >"$WORK/mysql.log" 2>&1 &
+  --bind-address=127.0.0.1 --port="$port" --secure-file-priv="$WORK/mysql-files" >"$WORK/mysql.log" 2>&1 &
 mysql_pid=$!
 root() {
-  mariadb --no-defaults --socket="$WORK/mysql.sock" -u root "$@"
+  mariadb --no-defaults --socket="$WORK/mysql.sock" "$@"
 }
 for _ in $(seq 1 100); do
   root -e "select 1" >/dev/null 2>&1 && break
@@ -68,12 +73,13 @@ HX_ENV="DATABASE_URL='mariadb://app:s3cret@127.0.0.1:$port/shop'" hx_start_insta
 cmd "consumer-answer select title from books order by id;"
 expect "mariadb: a quiet query gives rows only" "consumer: answer=Solaris"
 
-# A unix socket, as a parameter: root has no password on the socket.
+# A unix socket, as a parameter: the user who started the server needs no
+# password on it.
 hx_start "$WORK/my.sql"
-cmd "db-run mariadb://root@/shop?socket=$WORK/mysql.sock"
-expect "mariadb: a unix socket as a URL parameter" "-- mariadb://root@/shop"
+cmd "db-run mariadb:///shop?socket=$WORK/mysql.sock"
+expect "mariadb: a unix socket as a URL parameter, shown with the database" "-- mariadb:///shop?socket=$WORK/mysql.sock"
 expect "mariadb: rows over the socket" "| Kindred |"
-cmd "db-run mariadb://root@/shop?init-command=x"
+cmd "db-run mariadb:///shop?init-command=x"
 expect "mariadb: a parameter that isn't supported is refused" "db-run: 'init-command' is not a parameter mysql URLs support"
 
 # The drawer, on a database given by $DATABASE_URL: its tables and a helper.

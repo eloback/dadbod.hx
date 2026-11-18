@@ -120,14 +120,18 @@
               (db-url-without-password (parse-url "postgres:///dadbod"))
               "postgres:///dadbod")
 
-(check-equal? "url: display drops the password and the query"
+(check-equal? "url: display drops the password and masks password parameters"
               (db-url-display
-               (parse-url "postgres://app:s3cret@db.example.com:5433/shop?password=other"))
-              "postgres://app@db.example.com:5433/shop")
+               (parse-url "postgres://app:s3cret@db.example.com:5433/shop?password=other&SSLPassword=x"))
+              "postgres://app@db.example.com:5433/shop?password=…&SSLPassword=…")
+
+(check-equal? "url: display keeps the parameters that say where the connection goes"
+              (db-url-display (parse-url "postgres://app@db.example.com/shop?hostaddr=203.0.113.9&sslmode=disable"))
+              "postgres://app@db.example.com/shop?hostaddr=203.0.113.9&sslmode=disable")
 
 (check-equal? "url: display of an opaque URL"
               (db-url-display (parse-url "sqlite:notes.db?mode=ro"))
-              "sqlite:notes.db")
+              "sqlite:notes.db?mode=ro")
 
 ;; Errors. None of them quotes the URL: it can hold a password.
 

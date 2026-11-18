@@ -76,7 +76,20 @@
 ;;   {name}           its name without the schema, for inside a string
 ;; A name is only split at a dot where the database has schemas: elsewhere a
 ;; dot is part of the name.
+;;
+;; A name with a backslash, a brace or a control character in it is refused.
+;; Quoting those right depends on the server's settings and on how each
+;; client reads its input (psql and mysql take backslashes for their own
+;; commands), and getting it wrong runs what a hostile database put in a
+;; table's name.
 (define (expand-helper template table default-schema mark)
+  (unless (null? (filter (lambda (ch)
+                           (or (member ch (list #\\ #\{ #\}))
+                               (< (char->integer ch) 32)
+                               (= (char->integer ch) 127)))
+                         (string->list table)))
+    (error (string-append "this table's name has a backslash, a brace or a control character in "
+                          "it: the helpers don't run on such names")))
   (define parts (split-many table "."))
   (define qualified? (and default-schema (not (null? (cdr parts))) (null? (cddr parts))))
   (define schema (if qualified? (car parts) (or default-schema "")))

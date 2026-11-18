@@ -47,7 +47,18 @@
 (define (entry-dir label)
   (string-append (data-dir) "/" (folder-name label)))
 
+;; Makes `dir` if it isn't there. The data directory itself is made for the
+;; user only: saved queries can hold anything.
 (define (ensure-dir! dir)
+  (unless (is-dir? (data-dir))
+    (create-directory! (data-dir))
+    (with-handler (lambda (_) #f)
+                  (~> (command "chmod" (list "700" (data-dir)))
+                      with-stdout-piped
+                      with-stderr-piped
+                      spawn-process
+                      Ok->value
+                      wait)))
   (unless (is-dir? dir)
     (create-directory! dir))
   dir)

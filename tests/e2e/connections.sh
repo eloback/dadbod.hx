@@ -20,11 +20,12 @@ things  \$THINGS_URL
 viacmd  !echo sqlite:$WORK/things.db
 nowhere \$NOT_SET_ANYWHERE
 both    sqlite:$WORK/things.db
+envwins sqlite:$WORK/things.db
 broken
 EOF
 
-# A project with a connections file of its own: it adds one, replaces the
-# user's "both", and tries to have a command run.
+# A project with a connections file of its own: it adds one, tries to
+# replace the user's "both", and tries to have a command run.
 mkdir -p "$WORK/project/.helix"
 cat >"$WORK/project/.helix/dadbod-connections" <<EOF
 local  sqlite:$WORK/things.db
@@ -33,13 +34,13 @@ evil   !touch $WORK/evil-ran; echo sqlite:$WORK/shop.db
 EOF
 
 # From the environment, as vim-dadbod-ui has it: a new one, and one that
-# replaces the file's "shop".
-HX_ENV="THINGS_URL='sqlite:$WORK/things.db' DB_UI_FROMENV='sqlite:$WORK/things.db' DB_UI_SHOP='sqlite:$WORK/things.db'" hx_run "$WORK/project" "$ROOT/.helix" "$WORK/two.sql"
+# replaces the file's "envwins".
+HX_ENV="THINGS_URL='sqlite:$WORK/things.db' DB_UI_FROMENV='sqlite:$WORK/things.db' DB_UI_ENVWINS='sqlite:$WORK/shop.db'" hx_run "$WORK/project" "$ROOT/.helix" "$WORK/two.sql"
 
 cmd "db-use"
 expect "db-use alone says nothing is chosen, and lists the connections" \
-  "db-use: no database chosen  |  connections: shop, things, viacmd, nowhere, both, local, evil, fromenv"
-expect "and reports a line of the file it couldn't read" "line 7: 'broken'"
+  "db-use: no database chosen  |  connections: shop, things, viacmd, nowhere, both, envwins, fromenv, local, evil"
+expect "and reports a line of the file it couldn't read" "your dadbod-connections, line 8"
 
 cmd "db-run nosuch"
 expect "an unknown connection is an error" "db-run: no connection called 'nosuch'"
@@ -47,19 +48,21 @@ expect "an unknown connection is an error" "db-run: no connection called 'nosuch
 cmd "db-run nowhere"
 expect "a connection whose variable is unset is an error" "db-run: the environment variable NOT_SET_ANYWHERE is not set"
 
-cmd "db-run both"
+cmd "db-run shop"
 expect "a connection runs by its name" "| Kindred |"
-expect "the result names the connection and its database" "-- both (sqlite:$WORK/shop.db)"
+expect "the result names the connection and its database" "-- shop (sqlite:$WORK/shop.db)"
 
 cmd "db-run fromenv"
 expect "DB_UI_FROMENV in the environment is the connection fromenv" "-- fromenv (sqlite:$WORK/things.db)"
-cmd "db-run shop"
-expect "DB_UI_SHOP wins over the file's shop" "-- shop (sqlite:$WORK/things.db)"
 cmd "db-run both"
-expect "(back to a database with books)" "-- both (sqlite:$WORK/shop.db)"
+expect "the project's file can't replace a connection of the user's" "-- both (sqlite:$WORK/things.db)"
+cmd "db-run local"
+expect "a connection the project adds runs, marked as the project's" "-- local [project] (sqlite:$WORK/things.db)"
+cmd "db-run envwins"
+expect "DB_UI_ENVWINS wins over the file's envwins" "-- envwins (sqlite:$WORK/shop.db)"
 
 cmd "db-use"
-expect "db-use alone shows the buffer's database, by its name" "db-use: both  |"
+expect "db-use alone shows the buffer's database, by its name" "db-use: envwins  |"
 
 cmd "db-run evil"
 expect "a project's connection can't get its URL from a command" \
@@ -91,8 +94,8 @@ expect_gone "(the other buffer's result is replaced)" "| a thing |"
 open "$WORK/things.sql"
 cmd "db-run viacmd"
 expect "a connection whose URL a command prints" "-- viacmd (sqlite:$WORK/things.db)"
-cmd "db-run local"
-expect "a connection from the project's own file" "-- local (sqlite:$WORK/things.db)"
+cmd "db-use local"
+expect "db-use shows a project's connection as such" "db-use: local [project] (sqlite:$WORK/things.db)"
 
 cmd "db-use oracle://host/db"
 expect "db-use refuses what can't be run against" "db-use: no adapter for 'oracle' databases"

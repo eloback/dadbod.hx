@@ -63,8 +63,9 @@
 (define (dadbod-connection-names)
   (map connection-name (all-connections)))
 
-;; Where the connection `name` is defined (a file's path, or "init.scm"),
-;; or #f when there is none by that name.
+;; Where the connection `name` is defined (a file's path, "init.scm", or
+;; "$DB_UI_NAME" for the environment), or #f when there is none by that
+;; name. The project's file is <working directory>/.helix/dadbod-connections.
 (define (dadbod-connection-source name)
   (define found (find-connection (all-connections) name))
   (and found (connection-source found)))

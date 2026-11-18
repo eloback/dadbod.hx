@@ -18,6 +18,12 @@
 
 (define (build url mode)
   (require-authority url "postgres://user@host/database, or postgres:///database")
+  ;; The URL goes to psql whole, as an argument: a password in a parameter
+  ;; would be there for `ps` to show.
+  (unless (null? (filter (lambda (param) (member (string-downcase (car param)) (list "password" "sslpassword")))
+                         (db-url-params url)))
+    (error (string-append "give the password as postgres://user:password@…, not as a parameter: "
+                          "there it would show in the process list")))
   (invocation (list "psql")
               (append (list "-w" "-v" "ON_ERROR_STOP=1")
                       (if (equal? mode 'plain) (list "-A" "-t" "-q" "-X") '())

@@ -205,28 +205,55 @@
   (string-append (workspace-dir) "/.helix/dadbod-connections"))
 
 ;; (list connections problems) from one file; nothing from a missing one.
+;; Only a regular file of a sane size: a project's file comes with its
+;; repository, and a link to a pipe or to /dev/zero in its place would hang
+;; Helix or fill its memory.
 (define (read-connections path)
-  (if (path-exists? path)
-      (with-handler (lambda (_) (list '() (list (string-append path ": could not be read"))))
-                    (parse-connections (read-file path) path))
-      (list '() '())))
+  (cond
+    [(not (path-exists? path)) (list '() '())]
+    [(not (and (is-file? path)
+               (with-handler (lambda (_) #f) (<= (fs-metadata-len (file-metadata path)) 65536))))
+     (list '() (list (string-append path ": not read (not a plain file, or larger than 64 KiB)")))]
+    [else
+     (with-handler (lambda (_) (list '() (list (string-append path ": could not be read"))))
+                   (parse-connections (read-file path) path))]))
 
 ;; The connections the environment defines (DB_UI_<NAME>). Asked once: the
 ;; environment of a running Helix doesn't change, and asking runs `env`.
 (define (from-environment)
   (unless *from-environment*
     (set! *from-environment*
-          (with-handler (lambda (_) '()) (environment-connections (command-output "env")))))
+          (with-handler
+           (lambda (_) '())
+           ;; `env` prints lines, and a variable's value can have lines of
+           ;; its own that look like more variables: only those that really
+           ;; are variables, with that value, count.
+           (filter (lambda (c)
+                     (define variable (substring (connection-source c) 1 (string-length (connection-source c))))
+                     (equal? (trim (or (getenv variable) "")) (connection-reference c)))
+                   (environment-connections (command-output "env"))))))
   *from-environment*)
 
-;; Every connection there is. A name defined twice is the later one's: the
-;; user's file, the project's file, init.scm, the environment. The files are
-;; read anew each time: they are small and may have just been edited.
-(define (all-connections)
+;; The user's own connections. A name defined twice is the later one's: the
+;; user's file, init.scm, the environment.
+(define (own-connections)
   (merge-connections (list (car (read-connections (user-connections-file)))
-                           (car (read-connections (project-connections-file)))
                            *registered*
                            (from-environment))))
+
+;; (list connections refused): every connection there is, and the names the
+;; project's file defines that are the user's already. The project's file
+;; can add connections but not replace one: it comes with the repository,
+;; and `prod` must not quietly become someone else's server. The files are
+;; read anew each time: they are small and may have just been edited.
+(define (with-project)
+  (add-new-connections (own-connections) (car (read-connections (project-connections-file)))))
+
+(define (all-connections)
+  (car (with-project)))
+
+(define (project-connection? c)
+  (equal? (connection-source c) (project-connections-file)))
 
 ;; The lines of the connections files that couldn't be read, each as a
 ;; message. The user's file is named in short: its path fills a status line.
@@ -234,7 +261,12 @@
   (define (problems-of path short)
     (map (lambda (problem) (string-replace problem path short)) (cadr (read-connections path))))
   (append (problems-of (user-connections-file) "your dadbod-connections")
-          (problems-of (project-connections-file) ".helix/dadbod-connections")))
+          (problems-of (project-connections-file) ".helix/dadbod-connections")
+          (map (lambda (name)
+                 (string-append ".helix/dadbod-connections: '"
+                                name
+                                "' is one of your own connections already; the project's is ignored"))
+               (cadr (with-project)))))
 
 ;; What a database, as typed, stands for right now: (list name url-text),
 ;; the name #f for a URL. Looks the URL up, which may run the command of a
@@ -251,13 +283,15 @@
      (let ([found (find-connection (all-connections) database)])
        (unless found
          (error (string-append "no connection called '" database "'")))
-       (when (and (starts-with? (connection-reference found) "!")
-                  (equal? (connection-source found) (project-connections-file)))
+       (when (and (starts-with? (connection-reference found) "!") (project-connection? found))
          (error (string-append "the connection '"
                                database
                                "' in .helix/dadbod-connections gets its URL from a command: "
                                "that is only allowed in your own connections file")))
-       (list database (resolve-reference (connection-reference found) getenv command-output)))]
+       ;; A connection the repository brought is shown as such, wherever
+       ;; its name is shown with its URL.
+       (list (if (project-connection? found) (string-append database " [project]") database)
+             (resolve-reference (connection-reference found) getenv command-output)))]
     [else (list #f database)]))
 
 ;; The adapter of a database, without looking a connection up again once it
@@ -528,12 +562,19 @@
     (error "a connection's name is letters, digits, _ . and -"))
   (when (string=? (trim reference) "")
     (error "a connection needs a URL"))
-  ;; The file is readable by others and stays around: no password in it.
-  (when (and (not (starts-with? (trim reference) "$"))
-             (not (starts-with? (trim reference) "!"))
-             (with-handler (lambda (_) #f) (db-url-password (parse-url reference))))
-    (error (string-append "that URL has a password in it, which would be saved as it is: give "
-                          "$VARIABLE or !command instead (see the README), or the URL without it")))
+  ;; The file is plain text and stays around: no password in it. A URL is
+  ;; only saved when it reads as one and its adapter takes it: one that
+  ;; doesn't can have a password where it isn't looked for.
+  (unless (or (starts-with? (trim reference) "$") (starts-with? (trim reference) "!"))
+    (let ([verdict (with-handler (lambda (err) (trim (error-object-message err)))
+                                 (let ([url (parse-url reference)])
+                                   (url->invocation url 'table)
+                                   (if (db-url-password url) 'password 'fine)))])
+      (cond
+        [(equal? verdict 'password)
+         (error (string-append "that URL has a password in it, which would be saved as it is: give "
+                               "$VARIABLE or !command instead (see the README), or the URL without it"))]
+        [(string? verdict) (error (string-append "not saved: " verdict))])))
   (when (find-connection (car (read-connections (user-connections-file))) name)
     (error (string-append "there is a connection called '" name "' already")))
   (define path (user-connections-file))

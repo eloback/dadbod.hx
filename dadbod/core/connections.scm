@@ -31,6 +31,7 @@
          parse-connections
          environment-connections
          merge-connections
+         add-new-connections
          find-connection
          format-connection
          resolve-reference)
@@ -134,6 +135,15 @@
        (loop (cdr rest)
              (cons (connection-name (car rest)) seen)
              (cons (last-with (connection-name (car rest))) result))])))
+
+;; `base` with those of `more` whose names it doesn't have yet, after it.
+;; Returns (list connections refused): the list, and the names of `more`
+;; that were left out because `base` has them.
+(define (add-new-connections base more)
+  (define (known? c)
+    (find-connection base (connection-name c)))
+  (list (append base (filter (lambda (c) (not (known? c))) more))
+        (map connection-name (filter known? more))))
 
 ;; The connection called `name`, or #f.
 (define (find-connection connections name)

@@ -33,7 +33,9 @@
 ;;                   "" when absent
 ;; query             raw text after "?", or #f
 ;; without-password  the URL as given, minus the password: safe in argv
-;; display           without-password minus the query: safe to show
+;; display           without-password with the values of password parameters
+;;                   masked: safe to show. The other parameters stay: they
+;;                   can change where the connection goes (hostaddr=…)
 (struct db-url
         (scheme authority? user password host port path query without-password display))
 
@@ -50,6 +52,16 @@
   (if query
       (map pair (filter (lambda (part) (> (string-length part) 0)) (split-many query "&")))
       '()))
+
+;; A query string with the values of its password parameters replaced.
+(define (masked-query query)
+  (define (masked part)
+    (define equals (index-of-any part (list #\=)))
+    (define name (string-downcase (percent-decode (if equals (substring part 0 equals) part))))
+    (if (and equals (member name (list "password" "sslpassword")))
+        (string-append (substring part 0 equals) "=…")
+        part))
+  (string-join (map masked (split-many query "&")) "&"))
 
 (define (index-of-any s chars)
   (define len (string-length s))
@@ -194,7 +206,9 @@
                  (if query
                      (string-append without-password-prefix "?" query)
                      without-password-prefix)
-                 without-password-prefix)))]
+                 (if query
+                     (string-append without-password-prefix "?" (masked-query query))
+                     without-password-prefix))))]
 
     ;; scheme:path?query
     [else
@@ -211,4 +225,4 @@
                (percent-decode path)
                query
                (if query (string-append display "?" query) display)
-               display))]))
+               (if query (string-append display "?" (masked-query query)) display)))]))

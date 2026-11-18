@@ -134,6 +134,11 @@
               (args-of "postgres:///dadbod" 'plain)
               (list "-w" "-v" "ON_ERROR_STOP=1" "-A" "-t" "-q" "-X" "--dbname" "postgres:///dadbod"))
 
+(check-equal? "postgres: a password as a parameter is refused (it would be in the arguments)"
+              (map adapter-error (list "postgres://app@h/db?password=zzz" "postgres://app@h/db?sslmode=require&SSLPassword=y"))
+              (list "give the password as postgres://user:password@…, not as a parameter: there it would show in the process list"
+                    "give the password as postgres://user:password@…, not as a parameter: there it would show in the process list"))
+
 (check-equal? "postgres: without // is an error (the password would reach the arguments)"
               (adapter-error "postgres:app:secret@host/db")
               (string-append "postgres URLs need the // after the scheme, like "
@@ -251,6 +256,13 @@
                                     (map (lambda (h) (expand-helper (cdr h) "s.t" "public" "\"")) (adapter-helpers a)))
                                   adapters)))
               '())
+
+(check-equal? "helper: names the quoting can't be trusted with are refused"
+              (map (lambda (name) (error-message (lambda () (expand-helper "select * from {table};" name "public" "\""))))
+                   (list "x\\' ; drop table y; --" "a\nb" "x{schema}" "tab\there"))
+              (let ([refused (string-append "this table's name has a backslash, a brace or a control "
+                                            "character in it: the helpers don't run on such names")])
+                (list refused refused refused refused)))
 
 ;;; SQLite
 

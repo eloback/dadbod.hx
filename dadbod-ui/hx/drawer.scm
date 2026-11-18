@@ -39,7 +39,12 @@
 (define (entries-now)
   (define names (dadbod-connection-names))
   (define current (dadbod-current))
-  (append (map (lambda (name) (entry name name "")) names)
+  ;; A connection the repository brought says so.
+  (define (detail name)
+    (if (ends-with? (or (dadbod-connection-source name) "") "/.helix/dadbod-connections")
+        "[project]"
+        ""))
+  (append (map (lambda (name) (entry name name (detail name))) names)
           (if (and current (not (member current names)))
               (list (entry CURRENT current (with-handler (lambda (_) "") (dadbod-display current))))
               '())))
@@ -143,7 +148,11 @@
                        (with-tables *drawer*
                                     label
                                     (with-handler (lambda (_) (list 'failed "the table names are not UTF-8"))
-                                                  (parse-table-list (read-text stdout-file))))))))))
+                                                  (let ([tables (parse-table-list (read-text stdout-file))])
+                                                    ;; The drawer is drawn from this list each frame.
+                                                    (if (> (length tables) 5000)
+                                                        (list 'failed "more than 5000 tables: not listed")
+                                                        tables))))))))))
        #f)))
   (when problem
     (failed! problem)))

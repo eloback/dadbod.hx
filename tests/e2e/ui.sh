@@ -80,6 +80,11 @@ expect "A asks for a connection" "connection (name, then a URL"
 keys -l "leaky postgres://app:hunter2@host/db"
 keys Enter
 expect "A refuses to save a URL with a password in it" "dbui: that URL has a password in it"
+keys A
+expect "(A again)" "connection (name, then a URL"
+keys -l "leaky2 postgres:app:hunter2@host/db"
+keys Enter
+expect "and a URL its adapter doesn't take, where a password can hide" "dbui: not saved: postgres URLs need the //"
 if grep -q hunter2 "$WORK/home/.config/helix/dadbod-connections"; then
   fail "the password was written to the connections file"
 fi
