@@ -7,8 +7,11 @@ read the result in a split, in the spirit of
 It is a plugin for the Steel plugin system, so it needs Helix built from
 [mattwparas's `steel-event-system` fork](https://github.com/mattwparas/helix/blob/steel-event-system/STEEL.md).
 
-This is an MVP: one command, `:db-run`, and three adapters (PostgreSQL,
-MySQL/MariaDB, SQLite). See [Not there yet](#not-there-yet).
+It is young: two commands, `:db-run` and `:db-cancel`, and three adapters
+(PostgreSQL, MySQL/MariaDB, SQLite). [docs/FEATURES.md](docs/FEATURES.md)
+compares it with vim-dadbod feature by feature and says what comes next. A
+companion plugin in the manner of vim-dadbod-ui is planned in this
+repository ([dadbod-ui/](dadbod-ui/README.md)).
 
 ## Usage
 
@@ -41,8 +44,13 @@ runs the buffer against that database and opens the result below it:
 - **Errors.** The client stops at the first failing statement. Its error
   message is in the result, and the status line reports the exit code.
 - **Slow queries** don't freeze the editor: the client runs on its own thread
-  and the result appears when it is done. If you are typing in insert mode at
-  that moment, it appears once you are back in normal mode.
+  and the result appears when it is done. If you are in insert or select
+  mode at that moment, it appears once you are back in normal mode.
+- **`:db-cancel`** stops the newest query still running. It asks the
+  database to cancel the statement, so the server stops working on it, and
+  what the query had produced so far is shown. For a client that doesn't
+  react, run it again: that stops the client itself, but then the server may
+  go on running the statement.
 
 A key for it, in `init.scm`:
 
@@ -113,14 +121,15 @@ then in `~/.config/helix/init.scm`:
 
 and restart Helix. Without `forge`, put a checkout where Steel looks for
 packages, under the name `dadbod`: in `$STEEL_HOME/cogs/` (by default
-`~/.local/share/steel/cogs/`), or in any directory on `STEEL_SEARCH_PATHS`.
+`~/.local/share/steel/cogs/`, or `~/.steel/cogs/` if `~/.steel` exists), or in any directory on `STEEL_SEARCH_PATHS`.
 
-It needs `mktemp` on `PATH`, besides the database clients.
+It needs `sh`, `kill` and `mktemp` on `PATH`, besides the database clients.
 
 ## Not there yet
 
-- No way to cancel a running query from Helix. Kill the client (`pkill psql`)
-  and the run ends with the client's exit status.
+The full list, with what is planned, is in
+[docs/FEATURES.md](docs/FEATURES.md). The ones you will notice first:
+
 - One result buffer: a new run replaces the last result. Two runs at the same
   time both finish, and the one that finishes last is the one shown.
 - No named connections, no per-project connection file, no schema browser, no
@@ -133,27 +142,36 @@ It needs `mktemp` on `PATH`, besides the database clients.
 ## Development
 
 ```
-url.scm        database URLs: parsing, percent-decoding, the password-free forms
-adapters.scm   URL -> client, arguments and environment, one function per database
-run.scm        runs that as a child process and builds the result file
-dadbod.scm     the Helix side: :db-run, the query, the thread, the result split
-tests/unit.scm unit tests for the first three (no Helix needed)
-tests/e2e.sh   drives :db-run in a real Helix against temporary databases
+dadbod.scm        the plugin's entry: its typed commands
+dadbod/
+  api.scm         what other plugins (dadbod-ui) may use
+  core/           no Helix: URLs, adapters, the client process, the session
+  hx/             Helix: the editor module and what the commands do
+dadbod-ui/        the companion plugin, not written yet
+tests/            lint, unit tests (core/), end-to-end tests (a real Helix)
+docs/
+  DESIGN.md       how it is put together, and the rules that keep it so
+  HELIX-API.md    what building it taught about Helix's Steel API
+  FEATURES.md     vim-dadbod and vim-dadbod-ui, feature by feature: what is
+                  here, what is next, what won't be
 ```
 
-Adding a database is one function in `adapters.scm` that returns an
-`invocation`, an entry in its `adapters` list, and tests in both test files.
+Read [docs/DESIGN.md](docs/DESIGN.md) before changing anything structural.
+Adding a database is three steps, listed at the top of
+`dadbod/core/adapters.scm`.
 
 The dev shell is [devenv](https://devenv.sh) (`direnv allow`, or
-`devenv shell`). It brings the database clients and servers the tests use. It
-does **not** bring `hx`, `steel` or `steel-language-server`: the Steel inside
-Helix and the Steel tooling have to be the same version, so they come from
-wherever your Helix comes from.
+`devenv shell`). It brings the Helix fork with Steel, at the commit the
+plugin is tested against, the matching Steel tools (`steel`, `forge`,
+`steel-language-server`), and the database clients and servers the tests
+use. Inside the shell, `hx` is that pinned Helix, not your own.
 
 ```sh
-test-unit      # steel tests/unit.scm
-test-e2e       # tests/e2e.sh
-devenv test    # both; quiet unless something fails
+test-unit            # the boundary lint and tests/unit/*.scm; about a second
+test-unit session    # one file
+test-e2e             # tests/e2e/*.sh, in a real Helix; about a minute
+test-e2e sqlite api  # some parts
+devenv test          # everything; quiet unless something fails
 ```
 
 `tests/e2e.sh` starts Helix in a tmux server of its own (own socket, no
