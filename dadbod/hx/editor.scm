@@ -21,8 +21,7 @@
          buffer-key
          workspace-dir
          set-extension-keys!
-         normal-mode?
-         run-when-normal!
+         run-when-not-typing!
          run-later!
          show-in-split!
          spawn-worker
@@ -75,22 +74,25 @@
 
 ;;; Modes
 
-(define (normal-mode?)
-  (equal? (editor-mode) (string->editor-mode "normal")))
+(define (insert-mode?)
+  (equal? (editor-mode) (string->editor-mode "insert")))
 
-;; Calls `thunk` now when Helix is in normal mode, and otherwise once it is
-;; back in it. Returns whether it ran now.
+;; Calls `thunk` now unless Helix is in insert mode, and otherwise once it
+;; has left it. Returns whether it ran now.
 ;;
 ;; For anything that moves the focus: doing that puts Helix in normal mode,
 ;; so in insert mode it would end the mode under the user's fingers and the
-;; keys that follow would run as commands.
-(define (run-when-normal! thunk)
+;; keys that follow would run as commands. In select mode it is fine: the
+;; selection stays, and the user is not typing text. (Waiting there would
+;; also wait forever: a selection made with `v` and run with :db-run leaves
+;; Helix in select mode until the user does something about it.)
+(define (run-when-not-typing! thunk)
   (cond
-    [(normal-mode?)
+    [(not (insert-mode?))
      (thunk)
      #t]
     [else
-     (enqueue-thread-local-callback-with-delay 150 (lambda () (run-when-normal! thunk)))
+     (enqueue-thread-local-callback-with-delay 150 (lambda () (run-when-not-typing! thunk)))
      #f]))
 
 ;; Calls `thunk` on the main thread in `ms` milliseconds.
@@ -105,7 +107,7 @@
 ;; and it is reloaded, since the file changed under it. Returns the document
 ;; now showing the file.
 ;;
-;; Only in normal mode: see run-when-normal!.
+;; Not in insert mode: see run-when-not-typing!.
 (define (show-in-split! path doc)
   (define origin (editor-focus))
   (define view (and doc (editor-doc-exists? doc) (editor-doc-in-view? doc)))

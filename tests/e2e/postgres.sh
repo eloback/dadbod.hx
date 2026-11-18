@@ -49,7 +49,7 @@ refute "postgres: (the query really was still running)" "db-run: done in"
 # The result arrives in insert mode. Showing it there would end insert
 # mode, and what is typed next would run as commands.
 expect "postgres: the slow query finishes" "db-run: done in"
-expect "postgres: the result waits for normal mode" "shown when back in normal mode"
+expect "postgres: the result waits for the end of insert mode" "shown when you leave insert mode"
 # The window still holds the last result, "(2 rows)"; the new one has
 # "(1 row)" twice.
 refute "postgres: (it is not shown yet)" "(1 row)"
@@ -119,5 +119,5 @@ find_line "Tables"
 keys R
 expect "postgres: R asks for the tables again; another schema's are named with it" "▸ sales.Orders"
 select_line "sales.Orders"
-select_line "Foreign Keys"
+select_line "Foreign Keys" "sales.Orders"
 expect "postgres: a helper on a mixed-case table in another schema" "FOREIGN KEY (author_id) REFERENCES authors(id)"

@@ -56,6 +56,16 @@ cmd "db-run"
 expect_gone "a later run reuses the URL, and only the selection runs" "| Solaris |"
 expect "the selection's row" "| Kindred |"
 
+# A selection made in select mode (v): Helix stays in that mode after the
+# command, and the result must not wait for it to end.
+keys g g v g l
+expect "(select mode)" " SEL "
+cmd_from_select "db-run"
+expect "a run from select mode shows its result at once" "| Solaris |"
+expect_gone "(only the selection ran)" "| Kindred |"
+keys Escape
+normal_mode
+
 # The key from the README (.helix/init.scm binds it).
 keys g g x
 expect_re "(the first line is selected)" "two\.sql .*1 sel +1:"

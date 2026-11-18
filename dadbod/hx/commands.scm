@@ -143,7 +143,7 @@
   (let ([waiting *show-pending*])
     (set! *show-pending* path)
     (unless waiting
-      (run-when-normal! show-pending!))))
+      (run-when-not-typing! show-pending!))))
 
 (define (deliver! id failure)
   (define dir (run-dir id))
@@ -182,7 +182,7 @@
     ;; The status of a run whose result was just handed to show-result!.
     [(equal? kind 'result-status)
      (status! (if *show-pending*
-                  (string-append (cadr effect) ", shown when back in normal mode")
+                  (string-append (cadr effect) ", shown when you leave insert mode")
                   (cadr effect)))]
     [(equal? kind 'error) (error-status! (cadr effect))]
     [(equal? kind 'show) (show-result! (cadr effect))]
