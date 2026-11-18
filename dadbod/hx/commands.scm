@@ -63,6 +63,8 @@
 (define *callbacks* (hash))
 ;; Connections given from init.scm.
 (define *registered* '())
+;; Connections from the environment, once it has been looked at; #f before.
+(define *from-environment* #f)
 ;; Functions other plugins asked to be told events through.
 (define *listeners* '())
 ;; database, as typed -> its adapter, once it has been looked up.
@@ -209,13 +211,22 @@
                     (parse-connections (read-file path) path))
       (list '() '())))
 
-;; Every connection there is, the project's file winning over the user's,
-;; and those given from init.scm over both. Read anew each time: the files
-;; are small and may have just been edited.
+;; The connections the environment defines (DB_UI_<NAME>). Asked once: the
+;; environment of a running Helix doesn't change, and asking runs `env`.
+(define (from-environment)
+  (unless *from-environment*
+    (set! *from-environment*
+          (with-handler (lambda (_) '()) (environment-connections (command-output "env")))))
+  *from-environment*)
+
+;; Every connection there is. A name defined twice is the later one's: the
+;; user's file, the project's file, init.scm, the environment. The files are
+;; read anew each time: they are small and may have just been edited.
 (define (all-connections)
   (merge-connections (list (car (read-connections (user-connections-file)))
                            (car (read-connections (project-connections-file)))
-                           *registered*)))
+                           *registered*
+                           (from-environment))))
 
 ;; The lines of the connections files that couldn't be read, each as a
 ;; message. The user's file is named in short: its path fills a status line.

@@ -81,7 +81,7 @@ what is expanded, what each line means) is pure and is in
 | vim-dadbod-ui | Needs from dadbod | Verdict |
 | --- | --- | --- |
 | A drawer listing connections, toggled by a command | `:dbui`; it floats over the editor like a picker instead of sitting beside it, since Helix can't size a split | **have** |
-| Connections from an environment variable, from configuration, from a saved file (`:DBUIAddConnection`) | dadbod's connections, plus the database in use; `A` in the drawer adds one to the user's file | **have** |
+| Connections from an environment variable, from configuration, from a saved file (`:DBUIAddConnection`) | dadbod's connections (files, `init.scm`, `DB_UI_<NAME>` variables), plus the database in use; `A` in the drawer adds one to the user's file | **have** |
 | Schemas and tables under each connection | Tables, asked from the database when the section is first opened; other schemas' tables as `schema.table` | **have**, without schemas as a level of their own: **maybe**. |
 | Table helpers: List, Columns, Indexes, Foreign Keys, Primary Keys (PostgreSQL also References), and your own | The same five per adapter (SQLite has no separate Primary Key), run when chosen | **have** the built-in ones. Your own: **later**, with registering adapters. |
 | A query buffer per connection; `:w` runs it (on by default there) | A query file per connection, bound to it; `'execute-on-save` option, off by default: saving and running are different intentions | **have** |

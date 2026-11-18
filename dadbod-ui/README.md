@@ -38,7 +38,8 @@ do:
 ╰─ ? help   ret open   q close ────────────────────╯
 ```
 
-It lists your [connections](../README.md#connections), and after them the
+It lists your [connections](../README.md#connections), `DB_UI_<NAME>`
+environment variables among them, and after them the
 database dadbod is using when that isn't one of them (a URL you gave to
 `:db-run`, or `$DATABASE_URL`).
 

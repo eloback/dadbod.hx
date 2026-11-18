@@ -109,6 +109,14 @@ taken). With the last two no password is in the file.
   repository can point `prod` somewhere else: the result's first line always
   says where a query ran.
 
+They also come from the environment, as in vim-dadbod-ui: a variable
+`DB_UI_<NAME>` holding a URL is the connection `<name>` in lowercase
+(`DB_UI_DEV=postgres:///shop_dev` is `dev`). That suits direnv and devenv.
+The environment is read once, when Helix first needs the connections.
+
+When a name is defined more than once, the last of these wins: your file,
+the project's file, `init.scm`, the environment.
+
 They can also be given in `init.scm`:
 
 ```scheme

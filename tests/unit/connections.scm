@@ -42,6 +42,27 @@
               (parsed (format-connection (connection "prod" "!pass show databases/shop" "x")))
               (list (list (list "prod" "!pass show databases/shop" "file")) '()))
 
+;;; The environment
+
+(check-equal? "environment: DB_UI_<NAME> is the connection <name>, lowercased"
+              (map described
+                   (environment-connections
+                    (string-append "HOME=/home/me\n"
+                                   "DB_UI_DEV=postgres:///shop_dev\n"
+                                   "DB_UI_Staging_2=mysql://app@host/shop?ssl=true\n"
+                                   "NOT_DB_UI_X=sqlite:x.db\n"
+                                   "DB_UI_=sqlite:noname.db\n"
+                                   "DB_UI_EMPTY=\n"
+                                   "DB_UI_BAD-NAME!=sqlite:b.db\n")))
+              (list (list "dev" "postgres:///shop_dev" "$DB_UI_DEV")
+                    (list "staging_2" "mysql://app@host/shop?ssl=true" "$DB_UI_Staging_2")))
+
+(check-equal? "environment: a variable can't hold a command"
+              (environment-connections "DB_UI_EVIL=!touch /tmp/x; echo sqlite:a.db\n")
+              '())
+
+(check-equal? "environment: nothing there" (environment-connections "") '())
+
 ;;; Several sources
 
 (define user (list (connection "prod" "sqlite:user-prod.db" "user") (connection "dev" "sqlite:user-dev.db" "user")))

@@ -32,11 +32,13 @@ both   sqlite:$WORK/shop.db
 evil   !touch $WORK/evil-ran; echo sqlite:$WORK/shop.db
 EOF
 
-HX_ENV="THINGS_URL='sqlite:$WORK/things.db'" hx_run "$WORK/project" "$ROOT/.helix" "$WORK/two.sql"
+# From the environment, as vim-dadbod-ui has it: a new one, and one that
+# replaces the file's "shop".
+HX_ENV="THINGS_URL='sqlite:$WORK/things.db' DB_UI_FROMENV='sqlite:$WORK/things.db' DB_UI_SHOP='sqlite:$WORK/things.db'" hx_run "$WORK/project" "$ROOT/.helix" "$WORK/two.sql"
 
 cmd "db-use"
 expect "db-use alone says nothing is chosen, and lists the connections" \
-  "db-use: no database chosen  |  connections: shop, things, viacmd, nowhere, both, local, evil"
+  "db-use: no database chosen  |  connections: shop, things, viacmd, nowhere, both, local, evil, fromenv"
 expect "and reports a line of the file it couldn't read" "line 7: 'broken'"
 
 cmd "db-run nosuch"
@@ -45,15 +47,19 @@ expect "an unknown connection is an error" "db-run: no connection called 'nosuch
 cmd "db-run nowhere"
 expect "a connection whose variable is unset is an error" "db-run: the environment variable NOT_SET_ANYWHERE is not set"
 
-cmd "db-run shop"
+cmd "db-run both"
 expect "a connection runs by its name" "| Kindred |"
-expect "the result names the connection and its database" "-- shop (sqlite:$WORK/shop.db)"
+expect "the result names the connection and its database" "-- both (sqlite:$WORK/shop.db)"
+
+cmd "db-run fromenv"
+expect "DB_UI_FROMENV in the environment is the connection fromenv" "-- fromenv (sqlite:$WORK/things.db)"
+cmd "db-run shop"
+expect "DB_UI_SHOP wins over the file's shop" "-- shop (sqlite:$WORK/things.db)"
+cmd "db-run both"
+expect "(back to a database with books)" "-- both (sqlite:$WORK/shop.db)"
 
 cmd "db-use"
-expect "db-use alone shows the buffer's database, by its name" "db-use: shop  |"
-
-cmd "db-run both"
-expect "the project's connection wins over the user's of the same name" "-- both (sqlite:$WORK/shop.db)"
+expect "db-use alone shows the buffer's database, by its name" "db-use: both  |"
 
 cmd "db-run evil"
 expect "a project's connection can't get its URL from a command" \

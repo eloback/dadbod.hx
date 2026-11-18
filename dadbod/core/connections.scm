@@ -9,6 +9,8 @@
 ;; The last two keep passwords out of files: the URL is looked up when a
 ;; query runs, never stored.
 ;;
+;; Connections also come from the environment: see environment-connections.
+;;
 ;; Connections are written one per line, name first:
 ;;
 ;;   # comment
@@ -27,6 +29,7 @@
          connection-source
          connection-name?
          parse-connections
+         environment-connections
          merge-connections
          find-connection
          format-connection
@@ -48,6 +51,14 @@
   (and (string? text)
        (> (string-length text) 0)
        (null? (filter (lambda (ch) (not (name-char? ch))) (string->list text)))))
+
+(define (first-of text ch)
+  (define len (string-length text))
+  (let loop ([i 0])
+    (cond
+      [(>= i len) #f]
+      [(char=? (string-ref text i) ch) i]
+      [else (loop (+ i 1))])))
 
 (define (first-whitespace text)
   (define len (string-length text))
@@ -88,6 +99,26 @@
                    (+ number 1)
                    (cons (connection name reference source) found)
                    problems)])))))
+
+;; The connections the environment defines, as vim-dadbod-ui has them: a
+;; variable DB_UI_<NAME> holding a URL is the connection <name>, lowercased.
+;; `listing` is what `env` prints: NAME=value lines.
+;;
+;; The value is the URL itself. One that starts with "!" is left out: a
+;; variable is not a place to put a command to run.
+(define (environment-connections listing)
+  (define prefix "DB_UI_")
+  (define (from-line line)
+    (define equals (first-of line #\=))
+    (and (starts-with? line prefix)
+         equals
+         (let ([name (string-downcase (substring line (string-length prefix) equals))]
+               [value (trim (substring line (+ equals 1) (string-length line)))])
+           (and (connection-name? name)
+                (not (string=? value ""))
+                (not (starts-with? value "!"))
+                (connection name value (string-append "$" (substring line 0 equals)))))))
+  (filter (lambda (found) found) (map from-line (split-many listing "\n"))))
 
 ;; One list out of several, each a list of connections. A name defined in a
 ;; later list replaces the earlier one, in the earlier one's place.
