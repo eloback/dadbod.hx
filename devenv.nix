@@ -1,12 +1,53 @@
-{ pkgs, ... }:
-
 {
-  # The Steel-enabled `hx`, plus `steel` and `forge`, are NOT provided here:
-  # they come from the system (the nixos flake pins the Helix fork and the
-  # Steel version that must match it). This shell adds the database clients
-  # the adapters call, and a playground database.
+  pkgs,
+  lib,
+  inputs,
+  ...
+}:
+
+let
+  system = pkgs.stdenv.hostPlatform.system;
+
+  # The commit of steel-core that the pinned Helix is built with, read from
+  # its Cargo.lock.
+  steelInHelix =
+    let
+      lock = builtins.fromTOML (builtins.readFile "${inputs.helix-steel}/Cargo.lock");
+      core = lib.findFirst (p: p.name == "steel-core") null lock.package;
+    in
+    lib.last (lib.splitString "#" core.source);
+
+  # Helix with the Steel plugin system. The fork's own package builds the
+  # default features only, and its perl grammar doesn't compile with C23
+  # compilers (its own `bsearch` clashes with glibc's), so it is left out.
+  hx =
+    (inputs.helix-steel.packages.${system}.helix.override {
+      includeGrammarIf = grammar: grammar.name != "perl";
+    }).overrideAttrs
+      {
+        cargoBuildFeatures = [
+          "git"
+          "steel"
+        ];
+      };
+
+  steel = inputs.steel.packages.${system}.steel;
+in
+{
+  assertions = [
+    {
+      assertion = inputs.steel.rev == steelInHelix;
+      message = ''
+        devenv.yaml pins Steel at ${inputs.steel.rev}, but the pinned Helix is built with
+        steel-core ${steelInHelix}. Set the `steel` input to that commit: the tools and
+        the interpreter inside hx have to be the same Steel.
+      '';
+    }
+  ];
 
   packages = [
+    hx # the Steel-enabled Helix the tests drive
+    steel # steel (tests/unit.sh), forge, steel-language-server
     pkgs.sqlite # sqlite3, for the sqlite adapter
     pkgs.mariadb # mariadb client and server, for the mysql adapter and its test
     pkgs.tmux # tests/e2e.sh drives hx in an isolated tmux
@@ -29,24 +70,18 @@
   env.DATABASE_URL = "postgres:///dadbod";
 
   scripts.test-unit = {
-    description = "Unit tests for the URL parser and the adapters (needs `steel`)";
+    description = "The boundary lint and the unit tests (no Helix needed)";
     exec = ''
-      cd "$DEVENV_ROOT" && exec steel tests/unit.scm
+      exec "$DEVENV_ROOT/tests/unit.sh" "$@"
     '';
   };
 
   scripts.test-e2e = {
-    description = "Drive :db-run in a real hx against temporary databases";
+    description = "Drive the commands in a real hx against temporary databases";
     exec = ''
       exec "$DEVENV_ROOT/tests/e2e.sh" "$@"
     '';
   };
-
-  enterShell = ''
-    for tool in hx steel; do
-      command -v "$tool" >/dev/null || echo "dadbod.hx: '$tool' is not on PATH (it comes from the system, not this shell)" >&2
-    done
-  '';
 
   # `devenv test`
   enterTest = ''

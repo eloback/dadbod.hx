@@ -3,16 +3,27 @@ inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
 
-# If you're using non-OSS software, you can set allow_unfree to true.
-# allow_unfree: true
+  # The Helix this plugin is developed and tested against: mattwparas's
+  # steel-event-system fork (helix-editor/helix#8675), at a fixed commit. The
+  # plugin API isn't stable, so moving to a newer commit is a step of its
+  # own: change the commit here, run `devenv test`, fix dadbod/hx/editor.scm.
+  helix-steel:
+    url: github:mattwparas/helix/424add100eac9ca258d969b985a8ac370469ec05
+    inputs:
+      nixpkgs:
+        follows: nixpkgs-helix
 
-# If you're not willing to allow unsupported packages:
-# allow_unsupported_system: false
+  # Steel's tools (steel, forge, steel-language-server), at the commit of
+  # steel-core in that Helix's Cargo.lock: they have to match the interpreter
+  # inside hx. devenv.nix refuses to build when the two disagree.
+  steel:
+    url: github:mattwparas/steel/24cd21598c091fb88bc10a6375a1ded25e677c37
+    inputs:
+      nixpkgs:
+        follows: nixpkgs-helix
 
-# If you're willing to use a package that's vulnerable
-# permitted_insecure_packages:
-#  - "openssl-1.1.1w"
-
-# If you have more than one devenv you can merge them
-#imports:
-# - ./backend
+  # The nixpkgs those two are built with. Compiling Helix takes a while, so
+  # this is kept at a commit where it is already built on this machine (the
+  # nixos config's nixpkgs-unstable); any recent nixos-unstable works.
+  nixpkgs-helix:
+    url: github:nixos/nixpkgs/d4f25a3e562008648d45bcf2d70bcc7422cad84e
