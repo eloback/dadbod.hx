@@ -17,7 +17,7 @@ command -v steel >/dev/null || {
 if (($# == 0)); then
   tests/lint.sh
   tests/lint-test.sh
-  set -- url adapters job result session
+  set -- url adapters connections job result session drawer
 fi
 
 failed=()

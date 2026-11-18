@@ -97,3 +97,27 @@ expect "postgres: rows through \$DATABASE_URL" "Butler"
 HX_ENV="DATABASE_URL='$pg_url'" hx_start_installed "$WORK/pg.sql"
 cmd "consumer-answer select name from authors order by id;"
 expect "postgres: a quiet query gives rows only" "consumer: answer=Lem"
+
+# The drawer, on a database given by $DATABASE_URL: its tables and a helper.
+HX_ENV="DATABASE_URL='$pg_url'" hx_start "$WORK/pg.sql"
+cmd "dbui"
+expect "postgres: the database in use is in the drawer, without its password" "▸ current database  postgres://app@/postgres"
+refute "postgres: (no password in the drawer)" "s3cr"
+select_line "current database"
+select_line "Tables"
+expect "postgres: its tables are listed" "▸ authors"
+select_line "authors"
+select_line "Columns"
+expect "postgres: a table helper runs" "| data_type"
+expect "postgres: and answers about that table" "| integer"
+
+# Helpers on tables whose names need quoting, and in another schema.
+PGPASSWORD=$password psql -q -h "$WORK/pgsock" -p 5432 -U app -d postgres -c \
+  'create schema sales; create table sales."Orders" (id int primary key, author_id int references authors (id));'
+cmd "dbui"
+find_line "Tables"
+keys R
+expect "postgres: R asks for the tables again; another schema's are named with it" "▸ sales.Orders"
+select_line "sales.Orders"
+select_line "Foreign Keys"
+expect "postgres: a helper on a mixed-case table in another schema" "FOREIGN KEY (author_id) REFERENCES authors(id)"

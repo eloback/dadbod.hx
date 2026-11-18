@@ -6,3 +6,6 @@
 (require "helix/keymaps.scm")
 
 (keymap (global) (normal (space (x ":db-run"))))
+
+;; The companion plugin, from this checkout too.
+(require "../dadbod-ui.scm")

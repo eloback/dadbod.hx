@@ -21,7 +21,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 source "$ROOT/tests/e2e/lib.sh"
 
 if (($# == 0)); then
-  set -- sqlite api postgres mariadb
+  set -- sqlite connections ui api postgres mariadb
 fi
 
 for part in "$@"; do
