@@ -48,7 +48,7 @@ database dadbod is using when that isn't one of them (a URL you gave to
 | `j`, `k` | Move down and up. Also the arrow keys, `g` for the first line and `G` for the last. |
 | `ret`, `o`, `l` | Open or close what is under the cursor. On **New query**, a saved query or a helper: open it, which closes the drawer. |
 | `R` | Ask the database under the cursor for its tables again, and reread its saved queries. |
-| `A` | Add a connection: type its name, a space, and its URL (or `$VARIABLE`, or `!command`). It is written to `~/.config/helix/dadbod-connections`. What you type is visible and the file is plain text, so a URL with a password in it is refused. |
+| `A` | Add a connection: type its name, a space, and its URL (or `$VARIABLE`, or `!command`). It is written to `~/.config/helix/dadbod-connections`. What you type is visible and the file is plain text, so a URL with a password in it is refused, and so is one dadbod can't read as a URL. |
 | `d` | Delete the saved query under the cursor, after asking. |
 | `?` | Show or hide these keys. |
 | `q`, `esc` | Close the drawer. `:dbui` brings it back as you left it. |
@@ -58,7 +58,10 @@ are underneath. It floats rather than sitting beside them because Helix
 can't give a split a width: a side panel would take half the screen.
 
 - **Tables** are asked from the database the first time the section is
-  opened. If it can't be reached, the reason is shown in their place.
+  opened. If it can't be reached, the reason is shown in their place. More
+  than 5000 are not listed.
+- **`[project]`** after a connection means it comes from the repository's
+  `.helix/dadbod-connections`, not from you.
 - **A table's helpers** are ready-made queries: its rows (`List`, the first
   200), its columns, indexes and keys. Choosing one opens the query in a
   buffer and runs it.

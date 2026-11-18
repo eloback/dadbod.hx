@@ -170,7 +170,25 @@ user was looking at, and a buffer's text can drift from the model.
 
 Table names come from the database and can be anything. A helper's template
 never gets one as it is: `expand-helper` quotes it as an identifier or
-escapes it for a string (`core/adapter.scm`).
+escapes it for a string (`core/adapter.scm`), and refuses a name with a
+backslash, a brace or a control character. How those are read depends on
+server settings (PostgreSQL's `standard_conforming_strings`) and on the
+client's own lexer, and the clients run local commands from their input
+(`\!` in psql), so a wrong guess is code execution, not a wrong query.
+
+## What is trusted
+
+- The user's own connections (their file, `init.scm`, the environment):
+  fully. They may run commands.
+- The project's `.helix/dadbod-connections`: it may add connections, shown
+  as `[project]`, but not replace a user's by name and not run commands.
+- A URL's parameters are shown, not hidden: they decide where the
+  connection goes. Only password values are masked, and PostgreSQL password
+  parameters are refused because the URL is passed as an argument.
+- The database: not at all. Its table names are quoted or refused, its
+  output is copied as bytes and never interpreted by the plugin.
+- The query: it is the user's, and goes to the client as it is. The client
+  can run local commands from it; the README says so.
 
 Query files are plain files in a folder per database (`core/store.scm`), so
 the "saved queries" of a database are whatever `.sql` files are there.

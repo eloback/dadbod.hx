@@ -84,7 +84,7 @@ A key for it, in `init.scm`:
 A connection is a name for a database, so that you type `:db-run prod`.
 Write them one per line, the name first, in
 `~/.config/helix/dadbod-connections`, and for one project in
-`.helix/dadbod-connections` (its entries win):
+`.helix/dadbod-connections`:
 
 ```
 # name   where the URL comes from
@@ -103,19 +103,19 @@ taken). With the last two no password is in the file.
 - A command runs through `sh` with no terminal, and Helix waits for it: it
   can't ask you anything, so use one that answers by itself (`pass` with a
   graphical pinentry or an unlocked agent).
-- **The project's file can't use `!command`.** That file comes with the
-  repository, and naming a connection must not run what someone else wrote.
-  It can replace a connection of yours by using the same name, so a
-  repository can point `prod` somewhere else: the result's first line always
-  says where a query ran.
+- **The project's file is not trusted like your own**: it comes with the
+  repository. It can't use `!command`, and it can add connections but not
+  replace one of yours, so `prod` stays your `prod` (`:db-use` reports a
+  project entry that was ignored for that). A connection it adds is shown
+  with `[project]` after its name.
 
 They also come from the environment, as in vim-dadbod-ui: a variable
 `DB_UI_<NAME>` holding a URL is the connection `<name>` in lowercase
 (`DB_UI_DEV=postgres:///shop_dev` is `dev`). That suits direnv and devenv.
 The environment is read once, when Helix first needs the connections.
 
-When a name is defined more than once, the last of these wins: your file,
-the project's file, `init.scm`, the environment.
+When a name is defined more than once among your own, the last of these
+wins: your file, `init.scm`, the environment.
 
 They can also be given in `init.scm`:
 
@@ -156,8 +156,8 @@ the prompt, and your shell's, when you export `DATABASE_URL` by hand. To keep
 it out of both, leave it out of the URL and use the client's own mechanism
 (`~/.pgpass`, `~/.my.cnf`).
 
-A password given as a `?password=` parameter to PostgreSQL is not recognised
-and stays in the arguments.
+A password given as a `?password=` or `?sslpassword=` parameter to
+PostgreSQL is refused: the parameters go to `psql` as an argument.
 
 ### Where the files go
 
@@ -169,6 +169,42 @@ shows it; the plugin never deletes it.
 
 The client's output is copied byte for byte, so text that isn't UTF-8 is not
 lost; Helix decides how to display it.
+
+## Security
+
+What to know before pointing it at a database you care about.
+
+- **`:db-run` gives the buffer to the database's client, not only to the
+  database.** The clients have commands of their own, and some run programs
+  on your machine: `\!` and `\copy … program` in `psql`, `.shell` in
+  `sqlite3`, `system` in `mysql`. Running an SQL file is running a script:
+  read one you didn't write before you run it.
+- **Where a query goes is shown before and after**: the status line while
+  it runs and the result's first line name the database, with the URL's
+  parameters (they can change the host: `hostaddr=`, `socket=`), without the
+  password. dadbod-ui asks a database for its tables without showing that
+  line; the drawer marks connections a project brought with `[project]`.
+- **A repository can bring connections** (`.helix/dadbod-connections`), with
+  the limits described under [Connections](#connections). Running a query
+  against one sends the query, and whatever credentials your client finds
+  for that host (`~/.pgpass`, `~/.my.cnf`), to a server the repository
+  chose.
+- **Table names come from the database.** The drawer's helpers quote them,
+  and refuse a name with a backslash, a brace or a control character in it
+  rather than guess how the server and the client would read it.
+- **A result can contain anything**, including terminal control sequences
+  if the database holds them. Helix draws the result buffer; what such bytes
+  do there is up to Helix and your terminal.
+- **Passwords** are kept out of process arguments, results and the status
+  line; see [Passwords](#passwords) for where they still are. Queries and
+  results are files in a directory only you can read; dadbod-ui's saved
+  queries are in `~/.local/share/dadbod-ui`, created for you only.
+- **Helix itself**, in the fork this needs, loads a repository's
+  `.helix/init.scm` without asking. That is not this plugin's doing, but it
+  means opening Helix in a repository already runs that repository's code.
+
+To report a problem, open an issue, or for something sensitive use GitHub's
+private vulnerability reporting on the repository.
 
 ## Install
 
@@ -268,3 +304,7 @@ devenv processes down
 `.helix/languages.toml` sets up `steel-language-server` for the Scheme files.
 Helix only starts it after `:workspace-trust` in this repository (until then
 the status line shows `[⚠]`).
+
+## License
+
+[MIT](LICENSE).

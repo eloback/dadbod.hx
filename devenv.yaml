@@ -22,8 +22,8 @@ inputs:
       nixpkgs:
         follows: nixpkgs-helix
 
-  # The nixpkgs those two are built with. Compiling Helix takes a while, so
-  # this is kept at a commit where it is already built on this machine (the
-  # nixos config's nixpkgs-unstable); any recent nixos-unstable works.
+  # The nixpkgs those two are built with: a fixed nixos-unstable commit, so
+  # that Helix (which takes a while to compile) is only rebuilt when this
+  # changes. Any recent nixos-unstable works.
   nixpkgs-helix:
     url: github:nixos/nixpkgs/d4f25a3e562008648d45bcf2d70bcc7422cad84e
