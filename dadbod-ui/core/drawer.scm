@@ -165,9 +165,9 @@
   (if (expanded? d node) "▾ " "▸ "))
 
 (define help-lines
-  (list "  ret  open or close, run a helper       R  ask for the tables again"
-        "  A    add a connection                  d  delete a saved query"
-        "  q    close the drawer                  ?  hide this help"))
+  (list "  j k  move (also the arrows, g, G)      ret  open or close, run a helper"
+        "  R    ask for the tables again          A    add a connection"
+        "  d    delete a saved query              q    close (also esc)"))
 
 (define (count-of items)
   (string-append " (" (number->string (length items)) ")"))

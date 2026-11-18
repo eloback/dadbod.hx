@@ -8,7 +8,8 @@ echo "== dadbod-ui"
 HX_ENV="THINGS_URL='sqlite:$WORK/things.db'" hx_start "$WORK/two.sql"
 
 cmd "dbui"
-expect "the drawer opens" "dadbod-ui    ? for help"
+expect "the drawer opens, floating over the buffer" "? help   ret open   q close"
+expect "(the buffer is still there under it)" "select title from books where id = 1;"
 expect "and lists the connections" "▸ shop"
 expect "all of them" "▸ viacmd"
 
@@ -24,7 +25,8 @@ select_line "books"
 expect "a table opens to its helpers" "        Columns"
 
 select_line "Columns"
-expect_re "a helper opens a query buffer of its own" "NOR .*books\.Columns\.sql"
+expect_gone "choosing a helper closes the drawer" "? help   ret open   q close"
+expect_re "and opens a query buffer of its own" "NOR .*books\.Columns\.sql"
 expect "with the helper's query in it" "pragma table_info('books');"
 expect "and runs it" "| title "
 expect "against the connection the table is in" "-- shop (sqlite:$WORK/shop.db)"
@@ -69,9 +71,7 @@ expect_gone "? hides them again" "add a connection"
 # A connection whose URL can't be looked up: the reason is shown where its
 # tables would be.
 select_line "nowhere"
-find_line "nowhere"
-keys j j j
-keys Enter
+select_line "Tables" "nowhere"
 expect "a database that can't be reached says why, in place of its tables" \
   "the environment variable NOT_SET_ANYWHERE is not set"
 
@@ -94,14 +94,20 @@ grep -q "^extra sqlite:$WORK/things.db$" "$WORK/home/.config/helix/dadbod-connec
   fail "the connection was not written to the connections file"
 ok "and to the connections file"
 
-cmd "db-run"
-expect ":db-run refuses to run the drawer itself" "db-run: this is the drawer"
+# Moving: G to the last line, k up, g to the first; the arrow keys too.
+keys G
+keys Enter
+expect "G goes to the last line (and ret opens it)" "▾ extra"
+keys Enter
+expect "(and closes it)" "▸ extra"
 
 keys q
-expect_gone "q closes the drawer" "dadbod-ui    ? for help"
-
-cmd "dbui-select"
-expect "the drawer's commands refuse outside it" "dbui: this works in the drawer"
+expect_gone "q closes the drawer" "? help   ret open   q close"
+cmd "dbui"
+expect "(the drawer again)" "? help   ret open   q close"
+keys Escape
+expect_gone "esc closes it too" "? help   ret open   q close"
+normal_mode
 
 # Installed as a package, with the option to run a query file when it is
 # saved.

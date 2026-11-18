@@ -11,56 +11,14 @@
 
 (require "dadbod-ui/hx/drawer.scm")
 
-(provide dbui
-         dbui-select
-         dbui-refresh
-         dbui-add
-         dbui-delete
-         dbui-help
-         dbui-close)
+(provide dbui)
 
 ;;@doc
-;; Open the drawer of databases in this window.
+;; Open the drawer of databases, floating over the editor.
 ;;
-;; In the drawer: ret opens or closes what is under the cursor, or runs a
-;; table's helper; R asks for the tables again; A adds a connection;
-;; d deletes a saved query; q closes the drawer; ? shows the keys.
+;; j and k move; ret opens or closes what is under the cursor, opens a
+;; query, or runs a table's helper; R asks for the tables again; A adds a
+;; connection; d deletes a saved query; ? shows the keys; q or esc closes.
 (define (dbui)
   (open-command!)
-  void)
-
-;;@doc
-;; In the drawer: open or close what is under the cursor (ret).
-(define (dbui-select)
-  (select-command!)
-  void)
-
-;;@doc
-;; In the drawer: ask the database under the cursor for its tables again (R).
-(define (dbui-refresh)
-  (refresh-command!)
-  void)
-
-;;@doc
-;; In the drawer: add a connection to your connections file (A).
-(define (dbui-add)
-  (add-command!)
-  void)
-
-;;@doc
-;; In the drawer: delete the saved query under the cursor (d).
-(define (dbui-delete)
-  (delete-command!)
-  void)
-
-;;@doc
-;; In the drawer: show or hide the keys (?).
-(define (dbui-help)
-  (help-command!)
-  void)
-
-;;@doc
-;; In the drawer: close it (q).
-(define (dbui-close)
-  (close-command!)
   void)

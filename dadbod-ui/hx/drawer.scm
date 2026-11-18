@@ -1,9 +1,10 @@
-;; The drawer in Helix: keeps the one drawer (core/drawer.scm), draws it
-;; into a panel, and does what selecting a line asks for, through dadbod's
-;; API.
+;; The drawer in Helix: keeps the one drawer (core/drawer.scm), shows it in
+;; a floating list over the editor, and does what selecting a line asks for,
+;; through dadbod's API.
 ;;
-;; The drawer opens in the focused window rather than beside it: Helix
-;; can't give a split a width, so a side panel would take half the screen.
+;; It floats, like Helix's pickers, rather than sitting in a window: Helix
+;; can't give a split a width, and a buffer of its own would take the place
+;; of what the user was looking at.
 ;;
 ;; Nothing here looks a connection up (which can run its command) except
 ;; what the user asks for by pressing a key on it: listing a database's
@@ -14,31 +15,19 @@
 (require "../core/store.scm")
 (require "../../dadbod/api.scm")
 
-(provide open-command!
-         select-command!
-         refresh-command!
-         add-command!
-         delete-command!
-         help-command!
-         close-command!)
+(provide open-command!)
 
-(define PANEL "*dadbod-ui*")
+(define NAME "dadbod-ui")
 
 ;;; State. Only touched on the main thread.
 
 (define *drawer* (new-drawer))
-;; The panel's document while it is open.
-(define *doc* #f)
-;; The lines last drawn into the panel. What the user sees, and so what the
-;; cursor's line is read against: the model can have moved on since (tables
-;; arrive while another window has the focus).
-(define *drawn* '())
-;; The line the cursor was on when the drawer was last used.
-(define *line* 1)
+;; The line the cursor is on, among the lines shown.
+(define *cursor* 0)
 
-(define (reporting-errors command thunk)
+(define (reporting-errors thunk)
   (with-handler (lambda (err)
-                  (error-status! (string-append command ": " (trim (error-object-message err)))))
+                  (error-status! (string-append "dbui: " (trim (error-object-message err)))))
                 (thunk)))
 
 ;;; The databases
@@ -91,29 +80,39 @@
                                (drawer-entries *drawer*))])
            (and (not (null? found)) (entry-database (car found)))))))
 
-;;; Drawing
+;;; What is shown
+;;
+;; The model's first line is its title, which the box shows on its edge: the
+;; lines shown are the rest.
 
-(define (panel-focused?)
-  (and (doc-open? *doc*) (equal? (focused-doc) *doc*)))
+(define (shown-lines)
+  (cdr (drawer-lines *drawer*)))
 
-(define (texts lines)
-  (map line-text lines))
+(define (clamp-cursor!)
+  (set! *cursor* (max 0 (min *cursor* (- (length (shown-lines)) 1)))))
 
-;; Draws the drawer into the panel, with the cursor on the line of `node`,
-;; or else on line `fallback`. Only when the panel is what the user is
-;; looking at, in normal mode: otherwise it is drawn when next used.
-(define (redraw! node fallback)
-  (when (and (panel-focused?) (normal-mode?))
-    (let* ([lines (drawer-lines *drawer*)]
-           [wanted (or (and node (line-of-node lines node)) fallback)]
-           [line (max 0 (min wanted (- (length lines) 1)))])
-      (set-panel-text! (string-join (texts lines) "\n") line)
-      (set! *drawn* lines)
-      (set! *line* line))))
-
-;; The node of the line the cursor is on, as drawn.
 (define (current-node)
-  (node-at *drawn* (cursor-line)))
+  (define lines (shown-lines))
+  (if (and (>= *cursor* 0) (< *cursor* (length lines)))
+      (line-node (list-ref lines *cursor*))
+      (list 'title)))
+
+;; Changes the drawer with `change!` and keeps the cursor on the node it was
+;; on, wherever that line has moved to; on the same line number if the node
+;; is gone.
+(define (keeping-cursor change!)
+  (define node (current-node))
+  (change!)
+  (let ([line (line-of-node (shown-lines) node)])
+    (when line
+      (set! *cursor* line)))
+  (clamp-cursor!))
+
+(define (view)
+  (list "dadbod-ui"
+        (map line-text (shown-lines))
+        *cursor*
+        (if (drawer-help? *drawer*) "? hide help" "? help   ret open   q close")))
 
 ;;; Tables
 
@@ -123,7 +122,7 @@
 
 (define (load-tables! label)
   (define (failed! text)
-    (set! *drawer* (with-tables *drawer* label (list 'failed text))))
+    (keeping-cursor (lambda () (set! *drawer* (with-tables *drawer* label (list 'failed text))))))
   ;; Looking the database up can fail (an unset variable, a command), and so
   ;; can starting the client: either way it is shown where the tables go.
   (define problem
@@ -135,29 +134,37 @@
         database
         (dadbod-tables-sql database)
         (lambda (failure stdout-file stderr-file)
-          ;; Where the cursor is, read before the lines change under it.
-          (define node (and (panel-focused?) (current-node)))
           (if failure
               (let ([said (first-line stderr-file)])
                 (failed! (if (string=? said "") failure said)))
-              (set! *drawer*
-                    (with-tables *drawer*
-                                 label
-                                 (with-handler (lambda (_) (list 'failed "the table names are not UTF-8"))
-                                               (parse-table-list (read-text stdout-file))))))
-          (redraw! node *line*)))
+              (keeping-cursor
+               (lambda ()
+                 (set! *drawer*
+                       (with-tables *drawer*
+                                    label
+                                    (with-handler (lambda (_) (list 'failed "the table names are not UTF-8"))
+                                                  (parse-table-list (read-text stdout-file))))))))))
        #f)))
   (when problem
     (failed! problem)))
 
-;;; Query files
+;;; What a selection does
+;;
+;; Returns 'close when the drawer has done its job and gets out of the way:
+;; a query was opened.
 
 (define (perform! action)
   (define kind (car action))
   (cond
-    [(equal? kind 'load-tables) (load-tables! (cadr action))]
-    [(equal? kind 'new-query) (open-file! (new-query-file! (cadr action)))]
-    [(equal? kind 'open-saved) (open-file! (string-append (entry-dir (cadr action)) "/" (caddr action)))]
+    [(equal? kind 'load-tables)
+     (load-tables! (cadr action))
+     'stay]
+    [(equal? kind 'new-query)
+     (open-file! (new-query-file! (cadr action)))
+     'close]
+    [(equal? kind 'open-saved)
+     (open-file! (string-append (entry-dir (cadr action)) "/" (caddr action)))
+     'close]
     [(equal? kind 'run-helper)
      (let* ([label (cadr action)]
             [table (caddr action)]
@@ -166,139 +173,87 @@
             [sql (dadbod-helper-sql database helper table)])
        (open-file! (helper-file! label table helper sql))
        (when (option 'run-helpers)
-         (dadbod-run! database sql)))]
-    [else #f]))
+         (dadbod-run! database sql))
+       'close)]
+    [else 'stay]))
 
-;;; Commands
-
-(define (bind-keys!)
-  (set-panel-keys! PANEL
-                   (hash "ret"
-                         ":dbui-select"
-                         "o"
-                         ":dbui-select"
-                         "R"
-                         ":dbui-refresh"
-                         "A"
-                         ":dbui-add"
-                         "d"
-                         ":dbui-delete"
-                         "?"
-                         ":dbui-help"
-                         "q"
-                         ":dbui-close")))
-
-;; :dbui
-(define (open-command!)
-  (reporting-errors
-   "dbui"
-   (lambda ()
-     (reload-entries!)
-     ;; Now, not when the plugin was loaded: the keys are a copy of the
-     ;; global ones, and init.scm may have added to those since.
-     (bind-keys!)
-     (if (doc-open? *doc*)
-         (show-doc! *doc*)
-         (set! *doc* (open-panel! PANEL)))
-     (redraw! #f *line*))))
-
-;; Runs a command of the drawer's: only in the drawer, and only when what
-;; is drawn is the drawer as it is. If it has changed since (tables arrived
-;; while another window had the focus), the key was pressed on a line that
-;; no longer means what it shows: the drawer is drawn again instead.
-(define (in-panel command thunk)
-  (reporting-errors
-   command
-   (lambda ()
-     (unless (panel-focused?)
-       (error "this works in the drawer: open it with :dbui"))
-     (set! *line* (cursor-line))
-     (if (equal? (texts *drawn*) (texts (drawer-lines *drawer*)))
-         (thunk)
-         (begin
-           (redraw! #f *line*)
-           (status! "dbui: the drawer has changed since it was drawn; it is up to date now"))))))
-
-;; ret
-(define (select-command!)
-  (in-panel "dbui"
-            (lambda ()
-              (define node (current-node))
-              (define selected (select *drawer* node))
-              (set! *drawer* (car selected))
-              (redraw! node *line*)
-              (perform! (cadr selected))
-              (redraw! node *line*))))
+(define (select!)
+  (define selected (select *drawer* (current-node)))
+  (keeping-cursor (lambda () (set! *drawer* (car selected))))
+  (perform! (cadr selected)))
 
 ;; R: the database under the cursor is asked for its tables again, and its
 ;; saved queries are read again.
-(define (refresh-command!)
-  (in-panel "dbui"
-            (lambda ()
-              (define node (current-node))
-              (reload-entries!)
-              (when (and (pair? (cdr node)) (entry-labelled (cadr node)))
-                (set! *drawer* (with-tables *drawer* (cadr node) 'loading))
-                (load-tables! (cadr node)))
-              (redraw! node *line*))))
+(define (refresh!)
+  (define node (current-node))
+  (keeping-cursor
+   (lambda ()
+     (reload-entries!)
+     (when (and (pair? (cdr node)) (entry-labelled (cadr node)))
+       (set! *drawer* (with-tables *drawer* (cadr node) 'loading))
+       (load-tables! (cadr node))))))
 
 ;; A: "name reference" is added to the user's connections.
-(define (add-command!)
-  (in-panel "dbui"
-            (lambda ()
-              (ask! "connection (name, then a URL without a password, $VARIABLE or !command): "
-                    (lambda (answer)
-                      (reporting-errors
-                       "dbui"
-                       (lambda ()
-                         (define words (filter (lambda (w) (not (string=? w ""))) (split-many (trim answer) " ")))
-                         (when (or (null? words) (null? (cdr words)))
-                           (error "give a name and, after a space, where its URL comes from"))
-                         (dadbod-add-connection! (car words) (string-join (cdr words) " "))
-                         (reload-entries!)
-                         (redraw! (list 'entry (car words)) *line*)
-                         (status! (string-append "dbui: added " (car words))))))))))
+(define (add!)
+  (ask! "connection (name, then a URL without a password, $VARIABLE or !command): "
+        (lambda (answer)
+          (reporting-errors
+           (lambda ()
+             (define words (filter (lambda (w) (not (string=? w ""))) (split-many (trim answer) " ")))
+             (when (or (null? words) (null? (cdr words)))
+               (error "give a name and, after a space, where its URL comes from"))
+             (dadbod-add-connection! (car words) (string-join (cdr words) " "))
+             (reload-entries!)
+             (let ([line (line-of-node (shown-lines) (list 'entry (car words)))])
+               (when line
+                 (set! *cursor* line)))
+             (status! (string-append "dbui: added " (car words))))))))
 
 ;; d: on a saved query, deletes it after asking.
-(define (delete-command!)
-  (in-panel "dbui"
-            (lambda ()
-              (define node (current-node))
-              (unless (equal? (car node) 'saved)
-                (error "d deletes a saved query: put the cursor on one"))
-              (ask! (string-append "delete " (caddr node) "? (y/n): ")
-                    (lambda (answer)
-                      (reporting-errors
-                       "dbui"
-                       (lambda ()
-                         (when (equal? (trim answer) "y")
-                           (delete-query! (cadr node) (caddr node))
-                           (reload-entries!)
-                           (redraw! #f *line*)
-                           (status! (string-append "dbui: deleted " (caddr node)))))))))))
+(define (delete!)
+  (define node (current-node))
+  (unless (equal? (car node) 'saved)
+    (error "d deletes a saved query: put the cursor on one"))
+  (ask! (string-append "delete " (caddr node) "? (y/n): ")
+        (lambda (answer)
+          (reporting-errors (lambda ()
+                              (when (equal? (trim answer) "y")
+                                (delete-query! (cadr node) (caddr node))
+                                (keeping-cursor reload-entries!)
+                                (status! (string-append "dbui: deleted " (caddr node)))))))))
 
-;; ?
-(define (help-command!)
-  (in-panel "dbui"
-            (lambda ()
-              (define node (current-node))
-              (set! *drawer* (toggle-help *drawer*))
-              (redraw! node *line*))))
+(define (move! by)
+  (set! *cursor* (+ *cursor* by))
+  (clamp-cursor!))
 
-;; q
-(define (close-command!)
-  (in-panel "dbui"
-            (lambda ()
-              (close-focused-buffer!)
-              (set! *doc* #f)
-              (set! *drawn* '()))))
+;; A key pressed in the drawer. Returns 'close to close it.
+(define (on-key key)
+  (cond
+    [(member key (list "j" "down")) (move! 1)]
+    [(member key (list "k" "up")) (move! -1)]
+    [(equal? key "g") (set! *cursor* 0)]
+    [(equal? key "G")
+     (set! *cursor* (length (shown-lines)))
+     (clamp-cursor!)]
+    [(member key (list "ret" "o" "l")) (reporting-errors select!)]
+    [(equal? key "R") (reporting-errors refresh!)]
+    [(equal? key "A") (reporting-errors add!)]
+    [(equal? key "d") (reporting-errors delete!)]
+    [(equal? key "?") (keeping-cursor (lambda () (set! *drawer* (toggle-help *drawer*))))]
+    [(member key (list "q" "esc")) 'close]
+    [else 'stay]))
+
+;;; Commands
+
+;; :dbui
+(define (open-command!)
+  (reporting-errors (lambda ()
+                      (keeping-cursor reload-entries!)
+                      ;; Not twice, if :dbui is given while it is open.
+                      (close-float! NAME)
+                      (open-float! NAME view on-key))))
 
 ;;; Set up, once, when the plugin is loaded
-
-;; The drawer's own text is not a query.
-(dadbod-not-a-query!
- (lambda ()
-   (and (panel-focused?) "this is the drawer: open a query from it (ret on New query)")))
 
 ;; A query file in a database's folder runs against that database, however
 ;; it was opened and whatever it was renamed to there.
@@ -309,8 +264,7 @@
 (on-file-saved!
  (lambda (path text)
    (when (and (option 'execute-on-save) (query-file? path))
-     (reporting-errors "dbui"
-                       (lambda ()
+     (reporting-errors (lambda ()
                          (define database (dadbod-database-of-file path))
                          (when database
                            (dadbod-run! database text)))))))

@@ -183,22 +183,38 @@ cmd() {
   keys Enter
 }
 
-# find_line <text>: puts the cursor on the first line that has the text, by
-# searching for it. For the drawer, whose lines are told apart by their text.
-find_line() {
-  normal_mode
-  keys /
-  keys -l "$1"
-  keys Enter
-  # Until the search has landed: it selects the match, so the cursor is past
-  # column 1, where the drawer leaves it. A key sent before that would act on
-  # the line the cursor was on.
-  wait_for "find '$1'" 'NOR .* [0-9]+:([2-9]|[0-9][0-9]+) *$' -E
+# The drawer is a floating box; its rows are the lines of the screen with a
+# box edge in them. drawer_row <text> [after]: the number (from 0) of the
+# first row with the text, below the first row with <after> when given.
+# Prints nothing when there is none.
+drawer_row() {
+  screen | awk -v text="$1" -v after="${2:-}" '
+    index($0, "│") > 0 {
+      row++
+      if (after != "" && !below) { if (index($0, after) > 0) below = 1; next }
+      if (index($0, text) > 0) { print row - 1; exit }
+    }'
 }
 
-# select_line <text>: presses Enter on that line.
+# find_line <text> [after]: puts the drawer's cursor on that row: to the top
+# with g, then down. Waits until the row is on the screen.
+find_line() {
+  local row="" i
+  for i in $(seq 1 75); do
+    row=$(drawer_row "$@")
+    [[ -n $row ]] && break
+    sleep 0.2
+  done
+  [[ -n $row ]] || fail "the drawer has no line with '$1'"
+  keys g
+  for ((i = 0; i < row; i++)); do
+    keys j
+  done
+}
+
+# select_line <text> [after]: presses Enter on that row.
 select_line() {
-  find_line "$1"
+  find_line "$@"
   trace "found '$1'"
   keys Enter
   trace "selected '$1'"
@@ -211,6 +227,13 @@ trace() {
     echo "----- trace: $1 -----" >&2
     screen | grep -v '^[[:space:]]*~\?[[:space:]]*$' >&2 || true
   fi
+}
+
+# A typed command from select mode.
+cmd_from_select() {
+  wait_for "select mode" " SEL "
+  type_text ":$1"
+  keys Enter
 }
 
 # open <file>: opens a file in the running Helix and waits until it is the
